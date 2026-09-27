@@ -54,6 +54,30 @@ omarchy-setup all
 
 The exact interface may evolve as the project is implemented.
 
+## First run
+
+Run initialization from the canonical checkout:
+
+```bash
+cd ~/.omarchy-setup
+./omarchy-setup init
+```
+
+Initialization downloads a pinned, checksum-verified `uv`, creates a dedicated
+Python environment under `~/.local/state/omarchy-setup`, installs this project,
+and links `~/.local/bin/omarchy-setup` to the repository launcher. It does not
+write generated environment files into the repository and does not need sudo.
+
+Later commands use the environment automatically:
+
+```bash
+omarchy-setup deblob --dry-run
+```
+
+Re-running `omarchy-setup init` is safe. A changed project is built beside the
+active environment and verified before activation. One previous environment is
+kept under the state directory for manual rollback.
+
 ## Deblob
 
 The first implemented slice removes only packages explicitly listed in
@@ -76,3 +100,10 @@ Run without the ordinary confirmation prompt:
 
 `-y` does not bypass compatibility, browser, dependency, or protected-package
 safety checks.
+
+## CI
+
+Normal GitHub-hosted CI runs unit and fake-state integration tests on Ubuntu.
+The manual `Fresh Omarchy VM` workflow uses the official `omarchy-iso-test`
+harness, a checksum-pinned Omarchy 4.0.4 ISO, and a disposable KVM guest. Its
+runner must carry the labels `self-hosted`, `omarchy`, `kvm`, and `disposable`.

@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+launcher_path=$(readlink -f -- "${BASH_SOURCE[0]}")
+repo_root=$(cd -- "$(dirname -- "$launcher_path")" && pwd)
+state_root="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-setup"
+environment_python="$state_root/environment/bin/python"
+
 export OMARCHY_SETUP_ROOT="$repo_root"
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE=1
 
-exec python3 -m omarchy_setup "$@"
+command_name=""
+for argument in "$@"; do
+  case "$argument" in
+    -y|--yes) ;;
+    -*) ;;
+    *) command_name="$argument"; break ;;
+  esac
+done
+
+if [[ -x $environment_python ]]; then
+  exec "$environment_python" -m omarchy_setup "$@"
+elif [[ $command_name == "init" || ${1:-} == "--help" || ${1:-} == "--version" ]]; then
+  exec /usr/bin/python3 -m omarchy_setup "$@"
+else
+  echo "omarchy-setup is not initialized. Run: $repo_root/omarchy-setup init" >&2
+  exit 2
+fi

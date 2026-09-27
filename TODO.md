@@ -2,11 +2,11 @@
 
 ## Bootstrap
 - [x] Implement root `omarchy-setup` launcher
-- [ ] Implement `omarchy-setup init`
-- [ ] Install/detect Micromamba
-- [ ] Create dedicated `omarchy-setup` environment
-- [ ] Install project CLI
-- [ ] Create `~/.local/bin/omarchy-setup`
+- [x] Implement `omarchy-setup init`
+- [x] Install/verify pinned `uv`
+- [x] Create dedicated `omarchy-setup` environment
+- [x] Install project CLI
+- [x] Create `~/.local/bin/omarchy-setup`
 
 ## Core
 - [ ] Implement `doctor`
@@ -43,6 +43,6 @@
 - [x] Unit-test framework
 - [x] Integration tests
 - [x] GitHub Actions basic CI
-- [ ] Omarchy 4.0.4 VM test
+- [ ] Run Omarchy 4.0.4 disposable VM workflow (implemented; awaiting compatible runner)
 - [ ] Latest Omarchy VM test
 - [ ] Upgrade-path VM test

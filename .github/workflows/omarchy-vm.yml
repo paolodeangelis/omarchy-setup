@@ -1,0 +1,69 @@
+name: Fresh Omarchy VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-omarchy-vm
+  cancel-in-progress: false
+
+jobs:
+  omarchy-4-0-4:
+    name: Omarchy 4.0.4
+    runs-on: [self-hosted, linux, x64, omarchy, kvm, disposable]
+    timeout-minutes: 90
+    env:
+      ISO_NAME: omarchy-4.0.4.iso
+      ISO_SHA256: ddeded2758c48318d201dfdac905ecb28f570441883f0c052ea3cd5d05acf92d
+    steps:
+      - name: Checkout omarchy-setup
+        uses: actions/checkout@v5
+        with:
+          path: omarchy-setup
+
+      - name: Checkout official ISO harness
+        uses: actions/checkout@v5
+        with:
+          repository: omacom/omarchy-iso
+          ref: 86c07785cb0f63be78edb1349843d5817b5c0e66
+          path: omarchy-iso
+
+      - name: Checkout Omarchy 4.0.4 acceptance suite
+        uses: actions/checkout@v5
+        with:
+          repository: omacom/omarchy
+          ref: v4.0.4
+          path: omarchy
+
+      - name: Download and verify official ISO
+        working-directory: omarchy-iso
+        run: |
+          mkdir -p release
+          curl -fsSL "https://iso.omarchy.org/$ISO_NAME" -o "release/$ISO_NAME"
+          echo "$ISO_SHA256  release/$ISO_NAME" | sha256sum -c -
+
+      - name: Add omarchy-setup acceptance test
+        run: |
+          mkdir -p omarchy/test/omarchy-setup
+          tar -C omarchy-setup --exclude=.git -cf - . | tar -C omarchy/test/omarchy-setup -xf -
+          install -m 0755 omarchy-setup/tests/vm/omarchy-setup-test.sh \
+            omarchy/test/acceptance.d/zz-omarchy-setup-test.sh
+
+      - name: Install and test in fresh Omarchy VM
+        working-directory: omarchy-iso
+        run: |
+          ./bin/omarchy-iso-test "release/$ISO_NAME" \
+            --sync-omarchy "$GITHUB_WORKSPACE/omarchy" \
+            --no-preview
+
+      - name: Upload VM diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omarchy-4.0.4-vm-diagnostics
+          path: omarchy-iso/test-runs/
+          if-no-files-found: warn
+          retention-days: 7

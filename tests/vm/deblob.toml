@@ -1,0 +1,16 @@
+schema_version = 1
+
+[packages]
+remove = ["moonlight-qt"]
+protected = [
+  "base",
+  "hyprland",
+  "linux-omarchy",
+  "networkmanager",
+  "omarchy",
+  "omarchy-settings",
+  "quickshell",
+  "sddm",
+  "systemd",
+  "uwsm",
+]

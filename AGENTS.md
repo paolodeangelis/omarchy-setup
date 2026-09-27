@@ -113,9 +113,9 @@ Use Bash only when shell commands are the natural implementation.
 
 The root `omarchy-setup` launcher may contain the minimal shell bootstrap necessary before the Python environment exists.
 
-Micromamba manages the dedicated Python environment used by `omarchy-setup`.
+`uv` manages the dedicated Python environment used by `omarchy-setup`.
 
-Do not depend on whichever Conda/Mamba environment happens to be active in the user's shell.
+Do not depend on whichever Python environment happens to be active in the user's shell.
 
 Prefer standard-library Python unless an external dependency provides clear value.
 
