@@ -1,0 +1,61 @@
+schema_version = 1
+
+[packages]
+# Explicitly selected standalone applications. Unknown packages are never
+# inferred from this list. Edit this file before running `omarchy-setup deblob`.
+remove = [
+  # Brave is this machine's configured default browser.
+  "chromium",
+
+  # Creative and media applications.
+  "kdenlive",
+  "moonlight-qt",
+  "obs-studio",
+  "pinta",
+  "xournalpp",
+
+  # Productivity and sharing applications.
+  "libreoffice-fresh",
+  "localsend",
+  "obsidian",
+
+  # Optional theme generator.
+  "aether",
+]
+
+# The planner aborts if Pacman's complete removal transaction includes any of
+# these packages. Pacman also protects dependencies required by retained apps.
+protected = [
+  "base",
+  "bash",
+  "btrfs-progs",
+  "foot",
+  "git",
+  "gnome-keyring",
+  "gum",
+  "hyprland",
+  "limine",
+  "linux-firmware",
+  "linux-omarchy",
+  "mise-bin",
+  "mkinitcpio",
+  "nautilus",
+  "networkmanager",
+  "omarchy",
+  "omarchy-keyring",
+  "omarchy-settings",
+  "pipewire",
+  "pipewire-pulse",
+  "plymouth",
+  "quickshell",
+  "sddm",
+  "snapper",
+  "sudo",
+  "systemd",
+  "ufw",
+  "uwsm",
+  "wireplumber",
+  "xdg-desktop-portal-gtk",
+  "xdg-desktop-portal-hyprland",
+  "yay",
+]

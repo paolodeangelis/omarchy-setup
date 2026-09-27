@@ -50,5 +50,29 @@ omarchy-setup theme
 omarchy-setup verify
 
 omarchy-setup all
+```
 
 The exact interface may evolve as the project is implemented.
+
+## Deblob
+
+The first implemented slice removes only packages explicitly listed in
+`config/deblob.toml`. It inspects installed state, plans Pacman's complete
+dependency transaction, rejects protected-package removal, asks for
+confirmation and sudo, applies through `omarchy pkg drop`, then verifies the
+result.
+
+Preview the plan without changing the machine:
+
+```bash
+./omarchy-setup deblob --dry-run
+```
+
+Run without the ordinary confirmation prompt:
+
+```bash
+./omarchy-setup deblob -y
+```
+
+`-y` does not bypass compatibility, browser, dependency, or protected-package
+safety checks.

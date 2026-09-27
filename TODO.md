@@ -1,7 +1,7 @@
 # TODO
 
 ## Bootstrap
-- [ ] Implement root `omarchy-setup` launcher
+- [x] Implement root `omarchy-setup` launcher
 - [ ] Implement `omarchy-setup init`
 - [ ] Install/detect Micromamba
 - [ ] Create dedicated `omarchy-setup` environment
@@ -33,14 +33,16 @@
 ## Deblob
 - [ ] Inventory clean Omarchy installation
 - [ ] Classify removable/default applications
-- [ ] Implement deblob planning
-- [ ] Implement deblob application
-- [ ] Implement verification
+- [x] Implement explicit package-list planning
+- [x] Implement explicit package-list application
+- [x] Implement package-state verification
+- [ ] Add optional feature groups and matching service/config cleanup
+- [ ] Validate removal policy in Omarchy VMs
 
 ## Testing / CI
-- [ ] Unit-test framework
-- [ ] Integration tests
-- [ ] GitHub Actions basic CI
+- [x] Unit-test framework
+- [x] Integration tests
+- [x] GitHub Actions basic CI
 - [ ] Omarchy 4.0.4 VM test
 - [ ] Latest Omarchy VM test
 - [ ] Upgrade-path VM test
