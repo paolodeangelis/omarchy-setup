@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+.env
+.env.*
+
+# Local Conda/Mamba state
+.conda/
+.mamba/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary/runtime files
+*.tmp
+*.log
+.DS_Store
+
+# Secrets and credentials
+*.key
+*.pem
+credentials*
+secrets*
