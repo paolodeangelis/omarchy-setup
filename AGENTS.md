@@ -10,6 +10,28 @@ The user normally experiments manually first. Once a setup works and is understo
 
 Do not redesign working user configuration without a reason.
 
+## Canonical project location
+
+The canonical repository location is:
+
+`~/.omarchy-setup`
+
+Preserve this project location.
+
+Do not move, duplicate, or recreate the repository elsewhere unless explicitly requested.
+
+Scripts must determine the repository root robustly rather than hardcoding a username or absolute `/home/<user>` path.
+
+Runtime state belongs under:
+
+`~/.local/state/omarchy-setup`
+
+The user-accessible launcher belongs under:
+
+`~/.local/bin/omarchy-setup`
+
+Keep generated/runtime state out of Git.
+
 ## Core principles
 
 - Prefer simple, understandable solutions over abstractions.
@@ -23,21 +45,65 @@ Do not redesign working user configuration without a reason.
 - Never store passwords, tokens, private keys, account credentials, or other secrets in the repository.
 - Runtime logs, backups, caches, and generated state belong outside the repository.
 
-## Repository locations
+## AGENTS.md hierarchy
 
-Canonical repository:
+The root `AGENTS.md` contains project-wide rules.
 
-`~/.omarchy-setup`
+Create additional `AGENTS.md` files at meaningful module or subtask boundaries when local instructions would improve development.
 
-Runtime state:
+Examples:
 
-`~/.local/state/omarchy-setup`
+`programs/winapps/AGENTS.md`
 
-User-accessible launcher:
+`programs/dropbox/AGENTS.md`
 
-`~/.local/bin/omarchy-setup`
+`src/omarchy_setup/modules/deblob/AGENTS.md`
 
-Keep generated/runtime state out of Git.
+`tests/AGENTS.md`
+
+Do not create an `AGENTS.md` in every directory automatically.
+
+Create one when a directory represents a distinct subsystem, workflow, safety boundary, or implementation area with instructions that differ from or extend the root rules.
+
+Nested `AGENTS.md` files should:
+
+- contain only instructions specific to that subtree
+- inherit the root project rules
+- avoid duplicating large portions of the root `AGENTS.md`
+- remain concise
+- document important assumptions, interfaces, safety constraints, and test requirements for that subsystem
+
+Before modifying a subsystem, read the applicable root and nearest nested `AGENTS.md` instructions.
+
+When creating a substantial new subsystem, consider whether it should receive its own `AGENTS.md`.
+
+## Progress tracking
+
+The root repository must contain:
+
+`TODO.md`
+
+`TODO.md` is the persistent project roadmap and progress tracker.
+
+Before starting substantial work:
+
+1. Read `TODO.md`.
+2. Identify the relevant current task.
+3. Avoid implementing later tasks accidentally unless required by the current task.
+
+After completing meaningful work:
+
+1. Update `TODO.md`.
+2. Mark completed items.
+3. Add newly discovered work where appropriate.
+4. Record important blockers or unresolved decisions.
+5. Keep the roadmap consistent with the actual repository state.
+
+Do not mark work complete merely because code was written. Relevant verification/tests must pass first.
+
+Keep `TODO.md` concise and useful. It is a project tracker, not a development log.
+
+For complicated standalone subsystems, a local `TODO.md` may be created when useful, but the root `TODO.md` remains the authoritative high-level project tracker.
 
 ## Architecture
 
