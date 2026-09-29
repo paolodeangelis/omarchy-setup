@@ -73,7 +73,8 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Unit-test framework
 - [x] Integration tests
 - [x] GitHub Actions basic CI
-- [ ] Run Omarchy 4.0.4 disposable VM workflow (manual workflow exists; compatible runner/successful run not established here)
-- [ ] Extend VM acceptance beyond bootstrap/programs/deblob dry-run: theme activation, both bars/plugins, live doctor, menus/OSD, and restore/idempotency checks
-- [ ] Implement and run fresh latest-stable Omarchy VM workflow with release discovery/trigger and recorded version/ISO verification
+- [x] Implement separate pinned/latest/configured-upgrade workflows, release watcher, verified ISO resolver and guarded official-harness adapter; local planning tests pass
+- [ ] Run Omarchy 4.0.4 disposable VM workflow (no registered runner at last check; see tests/vm/README.md)
+- [ ] Execute expanded VM acceptance: theme modes/companions, live doctor, upstream menus/OSD, restore, idempotency and actual deblob; scripts exist but guest execution remains unverified
+- [ ] Run fresh latest-stable Omarchy VM workflow when newer than baseline; currently latest equals 4.0.4
 - [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates

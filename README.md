@@ -262,6 +262,9 @@ messages; `--quiet` suppresses normal install/bootstrap output.
 ## CI
 
 Normal GitHub-hosted CI runs unit and fake-state integration tests on Ubuntu.
-The manual `Fresh Omarchy VM` workflow uses the official `omarchy-iso-test`
-harness, a checksum-pinned Omarchy 4.0.4 ISO, and a disposable KVM guest. Its
-runner must carry the labels `self-hosted`, `omarchy`, `kvm`, and `disposable`.
+Three manual VM workflows cover fresh pinned Omarchy, configured baseline
+upgraded to latest, and fresh latest. A release watcher dispatches candidate
+tests when a newer official release appears. They use the pinned official ISO
+harness and verified ISO checksums. A dedicated disposable KVM runner is
+required; these workflows have not yet established a passing compatibility run.
+See [runner setup, execution and coverage limits](tests/vm/README.md).

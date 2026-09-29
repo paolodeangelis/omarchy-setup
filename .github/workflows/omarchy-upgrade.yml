@@ -1,0 +1,19 @@
+name: Omarchy configured upgrade
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Optional release from the release detector; blank resolves latest
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: omarchy-upgrade
+  cancel-in-progress: false
+jobs:
+  test:
+    uses: ./.github/workflows/omarchy-system.yml
+    with:
+      mode: upgrade
+      candidate: ${{ inputs.candidate }}

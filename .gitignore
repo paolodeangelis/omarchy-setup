@@ -32,3 +32,6 @@ htmlcov/
 *.pem
 credentials*
 secrets*
+vm-artifacts/
+vm-input/
+.release-dispatched

@@ -1,0 +1,13 @@
+name: Omarchy pinned installation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: omarchy-pinned
+  cancel-in-progress: false
+jobs:
+  test:
+    uses: ./.github/workflows/omarchy-system.yml
+    with:
+      mode: pinned

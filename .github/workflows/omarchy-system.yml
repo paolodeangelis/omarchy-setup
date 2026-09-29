@@ -1,0 +1,67 @@
+name: Shared Omarchy VM execution
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      candidate:
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.release.outputs.run }}
+      candidate: ${{ steps.release.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve official release and ISO checksum
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          CANDIDATE: ${{ inputs.candidate }}
+        run: python3 tests/vm/resolve.py "$MODE" --candidate "$CANDIDATE" --output release.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.mode }}
+          path: release.json
+      - name: Explain skipped candidate
+        if: steps.release.outputs.run != 'true'
+        run: echo 'No newer official release than the configured baseline. No VM compatibility claim.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Require configured VM capacity
+        if: steps.release.outputs.run == 'true'
+        env:
+          RUNNER_ENABLED: ${{ vars.OMARCHY_VM_RUNNER_ENABLED }}
+        run: |
+          if [[ "$RUNNER_ENABLED" != true ]]; then
+            echo '::error::No configured disposable KVM runner. Follow tests/vm/README.md, then set OMARCHY_VM_RUNNER_ENABLED=true.'
+            exit 1
+          fi
+  vm:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: [self-hosted, linux, x64, omarchy, kvm, disposable]
+    timeout-minutes: 240
+    concurrency:
+      group: omarchy-vm-machine
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ inputs.mode }}
+          path: vm-input
+      - name: Install disposable VM and run acceptance
+        run: python3 tests/vm/host.py vm-input/release.json
+      - name: Upload selected diagnostics (never guest disks or SSH keys)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omarchy-${{ inputs.mode }}-${{ needs.resolve.outputs.candidate }}-${{ github.run_attempt }}
+          path: vm-artifacts/
+          if-no-files-found: error
+          retention-days: 14
