@@ -23,3 +23,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Exercise bootstrap CLI parsing
         run: ./omarchy-setup init -y --help >/dev/null
+      - name: Exercise program installer CLI parsing
+        run: ./omarchy-setup install all -y --help >/dev/null

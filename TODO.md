@@ -9,26 +9,56 @@
 - [x] Create `~/.local/bin/omarchy-setup`
 
 ## Core
-- [ ] Implement `doctor`
+- [x] Implement `doctor` (shell/IPC, OSD/menu, keybindings, helper commands, recent errors, optional UI smoke)
 - [ ] Implement command runner
 - [ ] Implement global `-y`
 - [ ] Implement dry-run architecture
 - [ ] Implement state/log directories
+- [x] Add shared progress reporting to init, install, deblob, and theme workflows
+- [x] Add evidence-first, scope-preserving agent guidance and layered tests/pinned-latest VM requirements
 
 ## Programs
-- [ ] Define program registry
+- [x] Define initial program registry
+- [x] Implement `install all` and independent installation
+- [x] Add explicit login and Omarchy-default hooks
 - [ ] Implement `programs list`
 - [ ] Implement `programs status`
 - [ ] Implement `--install-only`
-- [ ] Add Zen
-- [ ] Add Dropbox
+- [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
+- [x] Add Miniforge-backed `mamba` with an Omarchy-safe shell integration
 - [ ] Add WinApps
 
 ## Configuration
 - [ ] Dotfile deployment
-- [ ] Theme management
+- [x] Theme management
+- [x] Implement fixed-liquid and floating bar appearances (currently both use the overlay)
+- [x] Reach user-accepted bar appearance and popup spacing; preserve this visual baseline
+- [x] Move Olio bar geometry into a live-reloaded TOML file
+- [x] Validate Olio native theme TOML before activation
+- [x] Add fixed-mode shell overrides, restart the live shell when their effective theme changes, and provide literal floating popup-gap control
+- [x] Resolve shell surface colours from the native theme palette during installation
+- [x] Preserve the Olio overlay environment for bar-launched Omarchy commands
+- [x] Keep Spaces after Menu (replacing stock Workspaces), Omastorm radar after Weather, and Notification Center after Power in both bar modes
+- [x] Screen-clamp oversized floating popups so Notification Center keeps the right-side gap
+- [x] Restore Notification Center own-service access through host-owned widget construction; visually verify fresh messages in both modes
+- [x] Align notification toast offsets with the accepted bar popups in both modes; preserve notification borders
 - [ ] Assets management
 - [ ] Framework-specific configuration
+
+### Deferred compatibility follow-up
+
+These audit findings are not authorization to change the accepted desktop. Reproduce against current state when a relevant task is requested; visual acceptance does not establish stock or upgrade compatibility.
+
+- [ ] Restore/prove floating stock-shell compatibility, including optional `PluginBarApi.barMargins` absence and fixed-mode fallback
+- [ ] Validate the local widget-host extension in pinned/latest/upgrade VMs (unit/JavaScript, offscreen QML, and local desktop checks pass; upstream support remains pending)
+- [ ] Investigate Notification Center's DND control separately: its cross-service lookup is outside the own-service permission scope
+- [ ] Verify floating renderer parity and TOML gap/height semantics without retuning accepted geometry
+- [ ] Validate overlay reuse against all relevant upstream changes and verify complete stock restore
+- [ ] Make doctor detect QML property-assignment errors and distinguish missing evidence from healthy checks
+- [ ] Add real QML/VM acceptance for both styles, third-party previews, service-backed content, keyboard menus, and OSD
+- [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
+- [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
+- [ ] Triage one-time shell-start warnings after companion rescan (stock Network/Bluetooth null bar API, Olio delayed target, and duplicate Spaces IPC handler); interactions are clean afterward, but doctor currently reports the startup history
 
 ## Deblob
 - [ ] Inventory clean Omarchy installation
@@ -43,6 +73,7 @@
 - [x] Unit-test framework
 - [x] Integration tests
 - [x] GitHub Actions basic CI
-- [ ] Run Omarchy 4.0.4 disposable VM workflow (implemented; awaiting compatible runner)
-- [ ] Latest Omarchy VM test
-- [ ] Upgrade-path VM test
+- [ ] Run Omarchy 4.0.4 disposable VM workflow (manual workflow exists; compatible runner/successful run not established here)
+- [ ] Extend VM acceptance beyond bootstrap/programs/deblob dry-run: theme activation, both bars/plugins, live doctor, menus/OSD, and restore/idempotency checks
+- [ ] Implement and run fresh latest-stable Omarchy VM workflow with release discovery/trigger and recorded version/ISO verification
+- [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates

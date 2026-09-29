@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "olio.bar",
+  "name": "Olio Bar",
+  "version": "1.0.0",
+  "author": "Paolo",
+  "description": "Olio su Silicio status bar with floating and liquid modes",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.bar"
+  }
+}

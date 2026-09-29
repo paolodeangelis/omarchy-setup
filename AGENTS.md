@@ -10,6 +10,24 @@ The user normally experiments manually first. Once a setup works and is understo
 
 Do not redesign working user configuration without a reason.
 
+## Task scope and convergence
+
+- For substantial work, state the requested outcome, behavior to preserve, and evidence that will establish completion. Keep this brief; do not require a separate planning document for routine changes.
+- Treat user-accepted behavior and configuration as the baseline. A new request changes only the relevant requirement; it does not discard earlier constraints.
+- Distinguish investigation from implementation. Backlog items and audit findings are not authorization to repair unrelated behavior.
+- Before fixing an uncertain failure, reproduce the exact command or interaction and inspect relevant state/logs. Separate observations from hypotheses; identify the responsible layer before editing.
+- Make the smallest coherent change supported by the evidence. Do not combine a bug fix with visual redesign, refactoring, dependency replacement, or a broader compatibility workaround.
+- If a fix fails, record what the result disproves and remove only your unsuccessful changes when safe. Do not stack speculative patches. After two failed attempts at the same symptom, pause edits and reassess the mechanism and test method; continue read-only diagnosis without asking permission again.
+- Ask for clarification only when an unresolved choice materially affects behavior, safety, or scope. Continue authorized implementation and disposable tests without repeatedly asking the user to approve ordinary steps.
+- Stop when the requested acceptance conditions are met. Report unrelated findings separately instead of extending the task.
+
+## Efficient context and handoff
+
+- Read applicable instructions and task-relevant code/tests, not the whole repository by default. Reuse established evidence unless the underlying state changed.
+- Keep durable decisions and unresolved work in the relevant instructions and `TODO.md`; do not copy conversation transcripts or long debugging logs into them.
+- Keep instructions consistent with each other. Distinguish desired contracts from known implementation exceptions so future agents neither assume compatibility nor silently redesign the working setup.
+- When handing off unfinished work, record the exact remaining failure, evidence location, failed hypotheses, and next discriminating check. Do not restart an already completed investigation.
+
 ## Canonical project location
 
 The canonical repository location is:
@@ -259,6 +277,20 @@ Version-specific behavior should be isolated rather than scattered throughout un
 
 Unsupported versions should fail safely rather than guessing.
 
+Optional extensions must be capability-checked before use and must not prevent baseline initialization. Do not label a customization failure an upstream limitation until it is reproduced against the installed stock interface.
+
+Do not modify third-party plugins or bypass their permission/service boundaries to accommodate this repository's customization without an explicitly scoped task.
+
+When evaluating an external implementation, inspect its installation, update,
+rollback, compatibility checks, tests, and license—not only its appearance.
+Treat release posts and screenshots as claims until the referenced code or a
+published artifact contains the behavior. Record version/commit mismatches.
+
+For managed third-party replacements, establish and verify the replacement
+before disabling the built-in component. Keep an explicit restoration path,
+and do not claim future-release compatibility without pinned/latest/upgrade VM
+evidence.
+
 ## Tests
 
 Every meaningful behavior should be testable without modifying the real machine where practical.
@@ -278,6 +310,16 @@ Test idempotency for setup operations:
 `apply -> verify -> apply -> verify`
 
 The second application should normally require no changes.
+
+Preserve requirement-based tests; do not weaken assertions merely to match a new implementation. Read `tests/AGENTS.md` before changing tests.
+
+Match verification to the claim: mocked orchestration tests do not prove desktop rendering, stock compatibility, or upgrade safety. Report untested conditions explicitly; missing evidence is not a passing check.
+
+Use focused checks during iteration and relevant broader checks before handoff. Documentation-only edits need content/diff checks, not desktop restarts or package operations.
+
+The compatibility target is disposable GitHub Actions VM coverage for both the pinned workstation baseline (currently Omarchy 4.0.4) and the latest stable Omarchy release. Ubuntu unit tests are not a substitute. Read `.github/AGENTS.md` when changing workflows or claiming system compatibility.
+
+When adding system-facing behavior, add its relevant VM acceptance coverage or explicitly record the missing coverage and leave compatibility unverified. A workflow file existing is not evidence of a successful run. Fresh-install compatibility and upgrading an already customized installation are separate claims.
 
 ## Git and changes
 

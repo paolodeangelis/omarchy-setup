@@ -40,8 +40,8 @@ omarchy-setup doctor
 
 omarchy-setup deblob
 
-omarchy-setup programs <name>
-omarchy-setup programs all
+omarchy-setup install <name>
+omarchy-setup install all
 omarchy-setup programs list
 omarchy-setup programs status
 
@@ -53,6 +53,15 @@ omarchy-setup all
 ```
 
 The exact interface may evolve as the project is implemented.
+
+`omarchy-setup doctor` is read-only. It checks the running Quickshell instance,
+menu/OSD IPC, critical system-menu/media bindings, helper commands, and recent
+shell errors. Add `--ui` to summon and close every top-level Omarchy menu route
+and issue a short OSD smoke call.
+
+After switching a theme, an already-open terminal can retain the old
+`OMARCHY_PATH`; that is reported as a note. Hyprland keybindings use the live
+compositor environment, which the theme command updates.
 
 ## First run
 
@@ -100,6 +109,155 @@ Run without the ordinary confirmation prompt:
 
 `-y` does not bypass compatibility, browser, dependency, or protected-package
 safety checks.
+
+## Programs
+
+Install every registered optional program without the project confirmation:
+
+```bash
+omarchy-setup install all -y
+
+# list available installers and their descriptions
+omarchy-setup install ls
+```
+
+Install one program and optionally open its login/onboarding flow or apply an
+available Omarchy default:
+
+```bash
+omarchy-setup install zen --login --default
+omarchy-setup install dropbox --login
+```
+
+Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
+`spotify`, `whatsapp`, and `telegram`. `mamba` installs a pinned,
+checksum-verified Miniforge release under
+`~/.local/share/omarchy-setup/miniforge3`, appends one marked integration block
+to `~/.bashrc`, and leaves the base environment inactive. It does not run
+`conda init` or edit Omarchy-owned files. Open a new terminal after installing,
+then use normal commands such as:
+
+```bash
+omarchy-setup install mamba -y
+mamba create -n science python numpy pandas
+mamba activate science
+mamba deactivate
+```
+
+The active named environment is shown by Starship's conda module when enabled
+by the Omarchy prompt. `install all -y` includes mamba and skips every target
+already detected as installed. Login is always interactive and credentials
+remain with the application. At present only Zen has an applicable Omarchy
+default.
+
+## Theme
+
+Install and activate the repository-owned `olio-su-silicio` theme with its
+default fixed, full-width bar and Caelestia-style liquid popups:
+
+```bash
+omarchy-setup theme -y
+omarchy-setup theme bar-fixed -y
+```
+
+Use the floating island with the shared Omarchy popup host; liquid rendering is
+disabled in this mode so third-party widgets retain the stock popup contract:
+
+```bash
+omarchy-setup theme bar-floating -y
+omarchy-setup theme status
+```
+
+Edit the floating geometry directly in
+`themes/olio-su-silicio/plugins/olio.bar/bar.toml`. The bar watches this file,
+so valid changes to its height, screen-edge margin, side margin, and popup gap
+apply without rebuilding the liquid shell overlay. `floating.popup_gap` is the
+literal distance between the painted island and its popup in logical pixels.
+
+The base colour palette lives in
+`themes/olio-su-silicio/omarchy-theme/colors.toml`. Shell surface entries use
+quoted `palette.<key>` references; theme installation resolves them to native
+hex values in managed runtime state. Shell opacity and structural settings
+shared by both modes live in `shell.toml`. Fixed/liquid-only differences live
+in the partial `shell-fixed.toml`; `theme bar-fixed` merges that file over the
+common shell theme. The checked-in source files remain directly editable and
+generated mode output stays out of Git.
+
+Fixed liquid mode uses separate Wayland surfaces for the persistent bar and
+the popup. Matching translucent alpha values match their RGBA configuration,
+but the visible result can differ because each surface blends with different
+content behind it. Use alpha `1.0` for an exactly constant joined colour.
+
+Theme activation also verifies the companion Omarchy plugins. Spaces replaces
+the built-in workspace switcher after Menu, Omastorm radar is placed after
+Weather in the center group, and Notification Center is placed after Power at
+the far right. Missing plugins are installed through Omarchy's plugin command;
+re-running the theme command keeps their placement idempotent. Spaces is
+enabled before `omarchy.workspaces` is disabled, so an installation failure
+leaves the stock switcher available. Restore it manually with:
+
+```bash
+omarchy plugin enable omarchy.workspaces --section left --after omarchy.menu
+omarchy plugin disable tornikegomareli.spaces
+```
+
+Notification Center archives notifications; it does not replace Omarchy's
+floating notification toasts. Both bar styles use a version-checked host adapter
+in the user-owned overlay: registered third-party widgets receive their own
+scoped service access, while the replacement bar's service lookup remains
+restricted. Toasts follow the existing bar-popup offset and retain Omarchy's
+notification borders. No companion plugin source is patched.
+
+The adapter checks the installed host/API/notification source fingerprints
+before applying or reusing the overlay. Unknown versions are rejected; they
+must be reviewed and tested before updating the accepted fingerprints. This is
+a local compatibility extension, not an upstream API or proof of future-release
+compatibility. Local tests include offscreen Qt widget loading when Qt and
+Omarchy are available; fresh-install and upgrade VM coverage remains pending.
+
+### Omacale comparison and update risk
+
+[Omacale](https://github.com/AyushKr2003/omacale) replaces the complete bar
+with a self-contained Caelestia-style shell: it owns its drawers, workspaces,
+toasts, keyboard navigation, and third-party widget host. Its published code
+draws the bar frame and drawers together as one screen-sized SDF blob, rather
+than trying to reshape independent stock `KeyboardPanel` windows. Olio instead
+keeps Omarchy's bar-widget ecosystem and changes the shared popup host only
+where the fixed liquid attachment needs it. Omacale therefore achieves a more
+coherent shell surface, but it has a much larger replacement surface.
+
+Omacale reduces that risk with pre-install snapshots, exact uninstall restore,
+an upstream-contract checker, and optional notification/lock clones rebuilt
+from the installed Omarchy. Their watchdog can return a failed handover to the
+stock implementation. Those are useful lifecycle patterns; they do not make a
+full shell replacement automatically compatible with future Omarchy releases.
+
+The [Reddit 0.37 announcement](https://www.reddit.com/r/omarchy/comments/1wsm89g/omacale_037_bar_can_now_go_on_any_edge/)
+describes the entire UI adapting live to any screen edge. On 2026-09-28, the
+public `main` branch was commit `ff7c8146` and identified itself as 0.35.12; no
+0.37 branch or tag was published. The announced behavior is
+therefore not yet source-verifiable and is not copied into Olio. Olio remains
+version-gated and must pass pinned, latest, and configured-upgrade VM tests
+before an Omarchy update is considered safe. Companion plugins are currently
+installed from their upstream default branches on first setup, so a fresh
+installation can also receive newer plugin code than this workstation;
+pinning/reviewing those revisions remains open.
+
+Theme assets, wallpapers, the custom bar, and Hyprland's rounded-window
+override remain editable in this repository. The command links them into
+`~/.config` and preserves replaced user files under
+`~/.local/state/omarchy-setup/themes/olio-su-silicio/backups`. The liquid
+overlay is built under the state directory and never modifies
+`/usr/share/omarchy`. If the overlay is unavailable or incompatible, activation
+rolls back safely. Restore only the stock shell explicitly with:
+
+```bash
+omarchy-setup theme restore -y
+```
+
+Interactive `init`, `install`, `deblob`, and `theme` runs show a tqdm progress
+bar with the active step. Redirected output and CI use stable `[step/total]`
+messages; `--quiet` suppresses normal install/bootstrap output.
 
 ## CI
 

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, TextIO
 
+from omarchy_setup.progress import ProgressDisplay
+
 
 UV_VERSION = "0.12.19"
 UV_RELEASE = f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}"
@@ -294,7 +296,10 @@ def run_init(
     quiet: bool,
     stdin: TextIO,
     stdout: TextIO,
+    progress: bool = True,
 ) -> int:
+    display = ProgressDisplay(stdout, enabled=progress, quiet=quiet, total=5)
+    display.stage(1, "Inspecting bootstrap state")
     if os.geteuid() == 0:
         raise InitError("do not run omarchy-setup init as root")
     if not paths.source_launcher.is_file():
@@ -329,16 +334,18 @@ def run_init(
 
     if not changes:
         backend.verify_environment(paths.environment)
+        display.stage(5, "Existing environment verified")
         if not quiet:
             print("omarchy-setup is already initialized.", file=stdout)
         return 0
 
     if not quiet:
-        print("Initialization plan:", file=stdout)
+        display.message("Initialization plan:")
         for change in changes:
-            print(f"  - {change}", file=stdout)
+            display.message(f"  - {change}")
 
     if dry_run:
+        display.stage(5, "Dry run complete; no files changed")
         if not quiet:
             print("Dry run complete; no files changed.", file=stdout)
         return 0
@@ -349,13 +356,13 @@ def run_init(
 
     paths.state_root.mkdir(parents=True, exist_ok=True)
     if needs_uv:
-        if not quiet:
-            print(f"Installing verified uv {UV_VERSION}...", file=stdout)
+        display.stage(2, f"Installing verified uv {UV_VERSION}")
         backend.install_uv(paths.uv)
+    else:
+        display.stage(2, f"Verified uv {UV_VERSION}")
 
     if needs_environment:
-        if not quiet:
-            print("Building and verifying dedicated Python environment...", file=stdout)
+        display.stage(3, "Building dedicated Python environment")
         paths.environments.mkdir(parents=True, exist_ok=True)
         candidate = Path(
             tempfile.mkdtemp(prefix=f"{fingerprint[:12]}-", dir=paths.environments)
@@ -378,11 +385,16 @@ def run_init(
             + "\n"
         )
         os.replace(metadata_next, paths.metadata)
+    else:
+        display.stage(3, "Dedicated Python environment verified")
+
+    display.stage(4, "Installing user launcher")
 
     if needs_launcher:
         _install_launcher(paths)
 
     backend.verify_environment(paths.environment)
+    display.stage(5, "Initialization verified")
     if not quiet:
         print(f"Ready. Run: {paths.launcher} deblob --dry-run", file=stdout)
     return 0

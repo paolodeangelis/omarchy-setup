@@ -7,6 +7,9 @@ name = "omarchy-setup"
 version = "0.1.0"
 description = "Personal, reproducible setup framework for Omarchy"
 requires-python = ">=3.11"
+dependencies = [
+    "tqdm>=4.70.1,<5.0.0",
+]
 
 [project.scripts]
 omarchy-setup = "omarchy_setup.cli:entrypoint"

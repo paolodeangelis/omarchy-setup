@@ -1,0 +1,7 @@
+#!/bin/bash
+
+overlay_bin=$(cd -- "$(dirname -- "$0")" && pwd)
+export OMARCHY_PATH=${overlay_bin%/bin}
+export QML2_IMPORT_PATH="$OMARCHY_PATH/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+
+exec /usr/share/omarchy/bin/omarchy-launch-shell "$@"

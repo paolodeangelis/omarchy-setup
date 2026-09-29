@@ -1,0 +1,12 @@
+schema_version = 1
+
+[bar]
+# Height of a top/bottom bar and width of a left/right bar, in logical pixels.
+height = 36
+vertical_width = 28
+
+[floating]
+# Distance from the screen edge, left/right inset, and popup clearance.
+edge_margin = 9
+side_margin = 14
+popup_gap = 6

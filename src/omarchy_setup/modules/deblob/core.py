@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, Sequence, TextIO
 
+from omarchy_setup.progress import ProgressDisplay
+
 
 PACKAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9@._+:-]*$")
 
@@ -138,29 +140,6 @@ class OmarchyBackend:
         self._run(("omarchy", "pkg", "drop", *packages), capture=quiet)
 
 
-class ProgressDisplay:
-    def __init__(self, stream: TextIO, *, enabled: bool, quiet: bool, total: int = 5):
-        self.stream = stream
-        self.enabled = enabled and not quiet
-        self.quiet = quiet
-        self.total = total
-
-    def stage(self, step: int, text: str) -> None:
-        if self.quiet:
-            return
-        if not self.enabled or not getattr(self.stream, "isatty", lambda: False)():
-            print(f"[{step}/{self.total}] {text}", file=self.stream)
-            return
-
-        width = 28
-        filled = round(width * step / self.total)
-        bar = "█" * filled + "░" * (width - filled)
-        percent = round(100 * step / self.total)
-        color = "" if os.environ.get("NO_COLOR") else "\033[38;5;39m"
-        reset = "" if not color else "\033[0m"
-        print(f"{color}[{bar}] {percent:3d}%{reset}  {text}", file=self.stream)
-
-
 def _show_plan(
     *,
     configured: Sequence[str],
@@ -168,14 +147,15 @@ def _show_plan(
     transaction: Sequence[str],
     version: str,
     stream: TextIO,
+    display: ProgressDisplay | None = None,
 ) -> None:
     skipped = sorted(set(configured) - set(targets))
     dependencies = sorted(set(transaction) - set(targets))
     width = max(60, min(shutil.get_terminal_size(fallback=(100, 24)).columns, 120))
 
     def package_block(label: str, packages: Sequence[str]) -> None:
-        print(f"{label} ({len(packages)}):", file=stream)
-        print(
+        emit(f"{label} ({len(packages)}):")
+        emit(
             textwrap.fill(
                 ", ".join(packages),
                 width=width,
@@ -183,14 +163,19 @@ def _show_plan(
                 subsequent_indent="  ",
                 break_long_words=False,
                 break_on_hyphens=False,
-            ),
-            file=stream,
+            )
         )
 
-    print(f"Omarchy {version}", file=stream)
-    print(f"Configured removals: {len(configured)}", file=stream)
-    print(f"Installed targets: {len(targets)}", file=stream)
-    print(f"Complete transaction: {len(transaction)} packages", file=stream)
+    def emit(text: str) -> None:
+        if display is not None:
+            display.message(text)
+        else:
+            print(text, file=stream)
+
+    emit(f"Omarchy {version}")
+    emit(f"Configured removals: {len(configured)}")
+    emit(f"Installed targets: {len(targets)}")
+    emit(f"Complete transaction: {len(transaction)} packages")
     package_block("Targets", targets)
     if dependencies:
         package_block("Unused dependencies", dependencies)
@@ -215,7 +200,7 @@ def run_deblob(
     stdin: TextIO,
     stdout: TextIO,
 ) -> int:
-    display = ProgressDisplay(stdout, enabled=progress, quiet=quiet)
+    display = ProgressDisplay(stdout, enabled=progress, quiet=quiet, total=5)
 
     display.stage(1, "Checking Omarchy compatibility")
     version = backend.check_environment()
@@ -254,6 +239,7 @@ def run_deblob(
             transaction=transaction,
             version=version,
             stream=stdout,
+            display=display,
         )
 
     if dry_run:

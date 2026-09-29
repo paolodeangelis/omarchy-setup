@@ -1,0 +1,10 @@
+# Fixed/liquid mode overrides. Values not listed here come from shell.toml.
+# The bar and popup must be opaque as well as share one surface colour. Equal
+# translucent alpha still composites differently over wallpaper and windows,
+# which makes the joined surface appear to use two colours.
+
+[bar]
+background-alpha = 1.0
+
+[popups]
+background-alpha = 1.0
