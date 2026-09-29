@@ -28,4 +28,8 @@ jobs:
       - name: Exercise bootstrap CLI parsing
         run: ./omarchy-setup init -y --help >/dev/null
       - name: Exercise program installer CLI parsing
-        run: ./omarchy-setup install all -y --help >/dev/null
+        env:
+          PYTHONPATH: src
+        # The launcher deliberately requires init for non-bootstrap commands.
+        # This fast job checks parsing; installed-launcher checks run in the VM.
+        run: python -m omarchy_setup install all -y --help >/dev/null
