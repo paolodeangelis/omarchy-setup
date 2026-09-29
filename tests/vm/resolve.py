@@ -22,6 +22,8 @@ def fetch(url):
 
 
 def plan(config, mode, latest):
+    if mode not in {"pinned", "upgrade", "latest"}:
+        raise ValueError(f"unknown VM mode: {mode}")
     pinned = config["baseline"]
     version(pinned)
     candidate = pinned if mode == "pinned" else latest.removeprefix("v")
@@ -49,7 +51,10 @@ def main():
     if result["run"]:
         name = f'omarchy-{result["install_version"]}.iso'
         url = f"https://iso.omarchy.org/{name}"
-        checksum = fetch(url + ".sha256").split()[0]
+        parts = fetch(url + ".sha256").split()
+        if not parts:
+            raise ValueError("empty official ISO checksum")
+        checksum = parts[0].lower()
         if not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
             raise ValueError("invalid official ISO checksum")
         if result["install_version"] == config["baseline"] and checksum != config["baseline_iso_sha256"]:

@@ -45,9 +45,13 @@ upstream product code. Upgrade restarts the same disk rather than reinstalling.
 Artifacts include manifests, package lists, shell logs, screenshots, OCR and
 failures. Guest disks, SSH keys and firmware state are excluded. Screenshots and
 mapped layers are not proof of smooth animation: inspect them manually. Hardware,
-account login, multi-monitor behavior, Spaces hover/settings and frame-by-frame
+account login, multi-monitor behavior, radar preview clicks, Spaces hover/settings and frame-by-frame
 animation remain separate acceptance work. A VM failure may expose an existing
 utility compatibility defect; do not weaken tests merely to obtain green CI.
+
+`coverage.json` explicitly records UI checks still missing. Radar's standalone
+panel must never stand in for its bar-widget preview. Missing shell logs or QML
+assignment/load errors fail runtime acceptance rather than count as healthy.
 
 Never run `guest.sh` or package-removal acceptance on your workstation. The
 runtime guard is defense in depth, not permission to use a persistent machine.

@@ -15,6 +15,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: Run the same checks as pre-commit
+        run: |
+          python -m pip install pre-commit==4.2.0
+          pre-commit run --all-files --show-diff-on-failure
       - name: Compile Python sources
         run: python -m compileall -q src tests
       - name: Run unit and integration tests

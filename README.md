@@ -232,11 +232,12 @@ from the installed Omarchy. Their watchdog can return a failed handover to the
 stock implementation. Those are useful lifecycle patterns; they do not make a
 full shell replacement automatically compatible with future Omarchy releases.
 
-The [Reddit 0.37 announcement](https://www.reddit.com/r/omarchy/comments/1wsm89g/omacale_037_bar_can_now_go_on_any_edge/)
-describes the entire UI adapting live to any screen edge. On 2026-09-28, the
-public `main` branch was commit `ff7c8146` and identified itself as 0.35.12; no
-0.37 branch or tag was published. The announced behavior is
-therefore not yet source-verifiable and is not copied into Olio. Olio remains
+The earlier audit found a mismatch between the Reddit 0.37 announcement and
+then-published 0.35.12 code. The 2026-09-29 audit inspected `a213d722` (0.39.0):
+edge-dependent geometry is now source-verifiable. Its built-in popup morphing
+and third-party compatibility paths are different, however. See the
+[fixed-popup comparison and staged plan](docs/fixed-popup-animation-plan.md).
+No new animation code was applied. Olio remains
 version-gated and must pass pinned, latest, and configured-upgrade VM tests
 before an Omarchy update is considered safe. Companion plugins are currently
 installed from their upstream default branches on first setup, so a fresh
@@ -260,6 +261,25 @@ bar with the active step. Redirected output and CI use stable `[step/total]`
 messages; `--quiet` suppresses normal install/bootstrap output.
 
 ## CI
+
+### Fast checks before committing
+
+From the repository root, use uv's isolated tool environment:
+
+```bash
+uv tool run --from pre-commit==4.2.0 pre-commit install
+uv tool run --from pre-commit==4.2.0 pre-commit run --all-files
+```
+
+If `uv` is not on PATH, use `~/.local/state/omarchy-setup/bin/uv` after `init`.
+Hooks check Python/YAML/TOML/JSON syntax, merge markers, private-key patterns,
+large non-asset files, Actions definitions, Bash syntax and fast fixture tests.
+They do not format files, run setup, request sudo or boot VMs. First use downloads
+isolated tools (including actionlint's Go toolchain); subsequent runs reuse them.
+QML runtime/rendering and visual animation require separate desktop acceptance.
+The same hooks run in GitHub-hosted CI. Hook installation is opt-in per clone.
+
+### System checks
 
 Normal GitHub-hosted CI runs unit and fake-state integration tests on Ubuntu.
 Three manual VM workflows cover fresh pinned Omarchy, configured baseline

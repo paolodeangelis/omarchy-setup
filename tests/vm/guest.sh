@@ -61,7 +61,7 @@ checks() {
   session
   mkdir -p "$ARTIFACTS/$stage"
   "$LAUNCHER" doctor --ui
-  "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage"
+  "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage" "$STARTED"
   # Reuse upstream graphical contracts against the installed, active shell.
   for test in panels shell-surfaces; do
     OMARCHY_ACCEPTANCE_DIR="$ARTIFACTS/$stage/upstream" bash "$UPSTREAM_TESTS/acceptance.d/$test-test.sh"
@@ -86,9 +86,11 @@ if [[ $PHASE == initial ]]; then
   "$LAUNCHER" install all -y -d --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
   cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
+  sequence=0
   for style in fixed floating fixed; do
+    sequence=$((sequence + 1))
     "$LAUNCHER" theme "bar-$style" -y --no-progress
-    checks "$style"
+    checks "$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     cmp "$ARTIFACTS/state-before.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
@@ -116,13 +118,15 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   UPSTREAM_TESTS="$UPSTREAM_TESTS/candidate/test"
   authorize
   checks after-upgrade-before-reapply
+  sequence=0
   for style in fixed floating fixed; do
+    sequence=$((sequence + 1))
     "$LAUNCHER" theme "bar-$style" -y --no-progress
-    checks "after-upgrade-$style"
+    checks "after-upgrade-$sequence-$style"
   done
   "$LAUNCHER" install all -y --no-progress
   PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
 else
   echo "Invalid phase/mode $PHASE/$MODE"; exit 1
 fi
-echo "PASS: $MODE $PHASE; animation recordings still require human review"
+echo "PASS: automated subset for $MODE $PHASE; radar preview, Spaces interactions and animation remain unverified"

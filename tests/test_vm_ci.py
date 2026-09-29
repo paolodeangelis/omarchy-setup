@@ -2,6 +2,12 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+import json
+import os
+import subprocess
+import sys
+import tempfile
 
 
 def module(name):
@@ -43,3 +49,62 @@ class VmCiTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.host.replace_once(text, "anchor", "replacement")
         self.assertEqual(self.host.replace_once("anchor", "anchor", "new"), "new")
+
+    def test_reject_unknown_mode(self):
+        with self.assertRaises(ValueError):
+            self.resolve.plan(self.config, "typo", "v4.0.5")
+
+    def test_cli_skip_does_not_fetch_iso(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "release.json"
+            with patch.object(sys, "argv", ["resolve", "latest", "--output", str(output)]), \
+                    patch.object(self.resolve, "fetch", return_value='{"tag_name":"v4.0.4"}') as fetch, \
+                    patch.dict(os.environ, {"GITHUB_OUTPUT": str(Path(directory) / "outputs")}):
+                self.resolve.main()
+            self.assertFalse(json.loads(output.read_text())["run"])
+            fetch.assert_called_once()
+
+    def test_cli_bad_checksum_never_writes_success(self):
+        for checksum in ("", "bad", "0" * 64):
+            with self.subTest(checksum=checksum), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "release.json"
+                with patch.object(sys, "argv", ["resolve", "pinned", "--output", str(output)]), \
+                        patch.object(self.resolve, "fetch", return_value=checksum), \
+                        self.assertRaises(ValueError):
+                    self.resolve.main()
+                self.assertFalse(output.exists())
+
+    def test_harness_adapter_keeps_disk_and_tar_without_tty(self):
+        fixture = '''omarchy-pkg-add qemu-full edk2-ovmf socat imagemagick tesseract tesseract-data-eng
+ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance"
+  log "Collecting artifacts into $RUN_DIR"
+ssh_guest "tar -cf - /tmp/omarchy-acceptance"
+'''
+        for upgrade in (False, True):
+            adapted = self.host.adapt_harness(fixture, upgrade)
+            subprocess.run(["bash", "-n"], input=adapted, text=True, check=True)
+            self.assertNotIn("omarchy-pkg-add", adapted)
+            self.assertIn('ssh_guest -tt "OMARCHY_ACCEPTANCE_TEST_TIMEOUT=', adapted)
+            self.assertIn('ssh_guest "tar ', adapted)
+            self.assertEqual('start_vm "$RUN_DIR/run.qcow2"' in adapted, upgrade)
+
+    def test_host_refuses_workstation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_script = root / "tests/vm/host.py"
+            plan = root / "release.json"
+            plan.write_text('{}')
+            with patch.object(self.host, "__file__", str(fake_script)), \
+                    patch.object(sys, "argv", ["host", str(plan)]), \
+                    patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+                    patch.object(self.host, "run") as run, \
+                    self.assertRaisesRegex(RuntimeError, "never run on the workstation"):
+                self.host.main()
+            run.assert_not_called()
+
+    def test_desktop_log_requires_evidence_and_rejects_qml_errors(self):
+        desktop = module("desktop")
+        for log in ("", "-- No entries --\n", "Cannot assign to non-existent property barMargins", "TypeError: undefined"):
+            with self.subTest(log=log), self.assertRaises(RuntimeError):
+                desktop.validate_log(log)
+        desktop.validate_log("Shell configuration loaded")

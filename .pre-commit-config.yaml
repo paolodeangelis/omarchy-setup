@@ -1,0 +1,34 @@
+minimum_pre_commit_version: '4.2.0'
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-ast
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+        exclude: ^assets/  # Reviewed wallpapers are intentionally larger.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+        args: ['-shellcheck=']  # Bash syntax is checked below; no host dependency.
+  - repo: local
+    hooks:
+      - id: bash-syntax
+        name: Bash syntax (no execution)
+        language: system
+        entry: bash -c 'for file do bash -n "$file" || exit; done' --
+        types: [shell]
+      - id: unit-tests
+        name: Python unit and fixture integration tests
+        language: python
+        entry: env PYTHONPATH=src python -m unittest discover -s tests -t .
+        pass_filenames: false
+        files: ^(src/|tests/|themes/|config/|pyproject\.toml|omarchy-setup$)
+        additional_dependencies: ['tqdm>=4.70.1,<5']

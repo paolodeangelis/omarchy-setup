@@ -1,5 +1,6 @@
 """Disposable-guest companion panel evidence; not an animation quality oracle."""
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -8,6 +9,14 @@ import time
 
 def run(*args):
     return subprocess.check_output(args, text=True)
+
+
+def validate_log(log):
+    lines = [line for line in log.splitlines() if line.strip() and not line.startswith("-- ")]
+    if not lines:
+        raise RuntimeError("shell log unavailable: cannot establish runtime health")
+    if re.search(r"ReferenceError|TypeError|Cannot assign|Unable to assign|is not a type|Failed to load", log, re.I):
+        raise RuntimeError("shell runtime errors detected; inspect shell-runtime.log")
 
 
 def main():
@@ -23,8 +32,12 @@ def main():
     (output / "plugin-revisions.json").write_text(json.dumps(revisions, indent=2))
     run("notify-send", "Olio acceptance", "Notification archive integration probe")
     time.sleep(3)
-    # Shell summon opens the plugin panel, not the radar's standalone window.
-    for plugin in ("com.omastorm.radar", "jankeesvw.notification-center"):
+    (output / "coverage.json").write_text(json.dumps({
+        "radar_preview": "unverified: requires clicking the bar widget; summon opens a different surface",
+        "spaces_interactions": "unverified: hover, settings, persistence and multi-output need UI acceptance",
+        "animation_smoothness": "unverified: requires recorded transitions and frame review",
+    }, indent=2))
+    for plugin in ("jankeesvw.notification-center",):
         try:
             run("omarchy-shell", "shell", "summon", plugin)
             time.sleep(3)
@@ -41,6 +54,9 @@ def main():
         finally:
             run("omarchy-shell", "shell", "hide", plugin)
             time.sleep(1)
+    log = run("journalctl", "--user", "-t", "omarchy-shell", "--since", sys.argv[2], "--no-pager", "-o", "cat")
+    (output / "shell-runtime.log").write_text(log)
+    validate_log(log)
 
 
 if __name__ == "__main__":
