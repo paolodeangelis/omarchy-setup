@@ -294,27 +294,27 @@ Item {
       pluginId: key,
       moduleName: String(moduleName || ""),
       shell: pluginShell,
-      _showTooltip: function(target, text) { root.showTooltip(target, text) },
-      _hideTooltip: function(target) { root.hideTooltip(target) },
-      _registerClickTarget: function(target) { root.registerPluginClickTarget(key, target) },
-      _unregisterClickTarget: function(target) { root.unregisterPluginClickTarget(key, target) },
-      _requestPopout: function(owner) { root.requestPluginPopout(key, owner) },
-      _releasePopout: function(owner) { root.releasePluginPopout(key, owner) },
+      _showTooltip: function(target, text) { if (root) root.showTooltip(target, text) },
+      _hideTooltip: function(target) { if (root) root.hideTooltip(target) },
+      _registerClickTarget: function(target) { if (root) root.registerPluginClickTarget(key, target) },
+      _unregisterClickTarget: function(target) { if (root) root.unregisterPluginClickTarget(key, target) },
+      _requestPopout: function(owner) { if (root) root.requestPluginPopout(key, owner) },
+      _releasePopout: function(owner) { if (root) root.releasePluginPopout(key, owner) },
       _reportPopoutGeometry: function(owner, geometry) {
-        root.reportPopoutGeometry(owner, geometry)
+        if (root) root.reportPopoutGeometry(owner, geometry)
       },
       _popoutTransitionFor: function(screenName) {
-        return root.popoutTransitionFor(screenName)
+        return root ? root.popoutTransitionFor(screenName) : null
       },
-      _switchPanelFrom: function(owner, direction) { return root.switchPanelFrom(owner, direction) },
-      _targetBelongsToWindow: function(target, window) { return root.targetBelongsToWindow(target, window) },
+      _switchPanelFrom: function(owner, direction) { return root ? root.switchPanelFrom(owner, direction) : false },
+      _targetBelongsToWindow: function(target, window) { return root ? root.targetBelongsToWindow(target, window) : false },
       _moduleWidgets: function(requestedId) {
-        return String(requestedId || "") === String(moduleName || "")
+        return root && String(requestedId || "") === String(moduleName || "")
           ? root.moduleWidgets(moduleName) : []
       },
-      _run: function(command) { root.run(command) },
+      _run: function(command) { if (root) root.run(command) },
       _setCenterHoverRevealSuppressed: function(value) {
-        root.centerHoverRevealSuppressed = !!value
+        if (root) root.centerHoverRevealSuppressed = !!value
       }
     })
     if (!api) return null
@@ -2171,9 +2171,11 @@ Item {
 
     function injectProps() {
       var target = activeItem
-      if (!target) return
-      if (!useHostedWidget && "bar" in target) target.bar = firstParty
-        ? root : root.pluginBarApiFor(pluginApiId, moduleName, registered)
+      if (!target || !root) return
+      if (!useHostedWidget && "bar" in target) {
+        var api = firstParty ? root : root.pluginBarApiFor(pluginApiId, moduleName, registered)
+        if (api) target.bar = api
+      }
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
     }

@@ -61,7 +61,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
-- [ ] Triage one-time shell-start warnings after companion rescan (stock Network/Bluetooth null bar API, Olio delayed target, and duplicate Spaces IPC handler); interactions are clean afterward, but doctor currently reports the startup history
+- [ ] Reconfirm in the pinned VM that Olio plugin-facade teardown errors are gone; exact 4.0.4 stock panel null-style warnings are classified separately and all other runtime errors still fail
 
 ## Deblob
 - [ ] Inventory clean Omarchy installation

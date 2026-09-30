@@ -15,6 +15,20 @@ class DoctorError(RuntimeError):
 
 Runner = Callable[[tuple[str, ...], dict[str, str] | None], tuple[int, str]]
 MENU_ROUTES = ("root", "apps", "capture", "toggle", "hardware", "background", "theme", "system", "setup", "style", "share", "reminder")
+SHELL_ERROR_PATTERN = re.compile(
+    r"ReferenceError|TypeError|Cannot assign|Unable to assign|is not a type|Failed to load|segfault|crash|fatal",
+    re.IGNORECASE,
+)
+# Omarchy 4.0.4's stock panel Loader assigns `bar` after construction. Opening
+# a panel can therefore emit these exact null-style warnings before the first
+# assignment; the pristine-shell acceptance run produces the same signatures.
+# Keep the exception narrow so lifecycle, assignment, loading, and plugin-host
+# errors still fail doctor and VM acceptance.
+KNOWN_STOCK_PANEL_WARNING = re.compile(
+    r"/shell/plugins/panels/[^/]+/Panel\.qml.*TypeError: Cannot read property "
+    r"'(?:foreground|fontFamily|urgent)' of null",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +46,19 @@ def _default_runner(command: tuple[str, ...], environment: dict[str, str] | None
 def _active_shell_path(output: str) -> Path | None:
     matches = re.findall(r"^\s*Config path:\s*(.+?)/shell/shell\.qml\s*$", output, re.MULTILINE)
     return Path(matches[-1]) if matches else None
+
+
+def shell_log_findings(log: str) -> tuple[list[str], list[str]]:
+    suspicious: list[str] = []
+    known_stock: list[str] = []
+    for line in log.splitlines():
+        if not SHELL_ERROR_PATTERN.search(line):
+            continue
+        if KNOWN_STOCK_PANEL_WARNING.search(line):
+            known_stock.append(line)
+        else:
+            suspicious.append(line)
+    return suspicious, known_stock
 
 
 def collect_checks(*, runner: Runner = _default_runner, home: Path | None = None) -> list[Check]:
@@ -80,8 +107,11 @@ def collect_checks(*, runner: Runner = _default_runner, home: Path | None = None
         checks.append(Check(command, shutil.which(command) is not None, shutil.which(command) or "not found"))
 
     code, log = runner(("journalctl", "--user", "-t", "omarchy-shell", "--since", "15 minutes ago", "--no-pager"), None)
-    errors = sum(1 for line in log.splitlines() if re.search(r"TypeError|segfault|crash|fatal", line, re.IGNORECASE)) if code == 0 else 0
-    checks.append(Check("recent shell log", errors == 0, f"{errors} suspicious line(s)" if code == 0 else "unavailable"))
+    errors, known_stock = shell_log_findings(log) if code == 0 else ([], [])
+    detail = f"{len(errors)} suspicious line(s)"
+    if known_stock:
+        detail += f"; {len(known_stock)} known stock panel startup warning(s)"
+    checks.append(Check("recent shell log", code == 0 and not errors, detail if code == 0 else "unavailable"))
     return checks
 
 

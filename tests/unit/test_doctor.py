@@ -3,10 +3,25 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from omarchy_setup.modules.doctor.core import collect_checks
+from omarchy_setup.modules.doctor.core import collect_checks, shell_log_findings
 
 
 class DoctorTests(unittest.TestCase):
+    def test_shell_log_only_except_exact_stock_panel_null_style_warning(self) -> None:
+        known = (
+            "WARN file:///usr/share/omarchy/shell/plugins/panels/network/Panel.qml[12:-1]: "
+            "TypeError: Cannot read property 'foreground' of null"
+        )
+        custom = (
+            "WARN @services/OlioHostedBarWidget.qml[12:-1]: "
+            "TypeError: Cannot read property 'sourceBar' of null"
+        )
+
+        suspicious, known_stock = shell_log_findings(f"{known}\n{custom}\n")
+
+        self.assertEqual(suspicious, [custom])
+        self.assertEqual(known_stock, [known])
+
     def test_checks_live_shell_and_critical_interfaces(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

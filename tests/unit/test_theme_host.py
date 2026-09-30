@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which("node"), "Node is required for QML JavaScript behavior tests")
 class ThemeHostTests(unittest.TestCase):
+    def test_plugin_facades_guard_owner_destruction(self):
+        bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn("function(target) { if (root) root.hideTooltip(target) }", bar)
+        self.assertIn("if (!target || !root) return", bar)
+        hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
+        self.assertIn("readonly property var source: host && host.sourceBar", hosted)
+        self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)
+
     def test_fixed_popups_share_numeric_transition_geometry(self):
         source = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         self.assertIn("function reportPopoutGeometry(owner, geometry)", source)

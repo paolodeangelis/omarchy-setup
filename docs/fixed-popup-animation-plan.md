@@ -94,7 +94,10 @@ the bar height twice.
   multi-output behavior, and stock fallback/restoration remain required before
   claiming future-release compatibility.
 
-The hosted KVM workflow now reaches repository setup inside the guest, but its
-first full run exposed an empty Pacman sync database. That preflight was fixed;
-a passing system run is still required. Local evidence does not establish
-future-update compatibility.
+The hosted KVM workflow now completes repository bootstrap, all program installs,
+their idempotent repeat, theme activation, and live doctor startup in the guest.
+Its next run exposed plugin-facade teardown errors plus null-style warnings also
+present in the pristine 4.0.4 shell. Olio's teardown defects were fixed; only the
+three exact stock panel properties are classified separately, while every other
+QML/runtime error still fails acceptance. A passing rerun is still required.
+Local evidence does not establish future-update compatibility.

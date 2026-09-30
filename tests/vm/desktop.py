@@ -1,10 +1,11 @@
 """Disposable-guest companion panel evidence; not an animation quality oracle."""
 import json
-import re
 from pathlib import Path
 import subprocess
 import sys
 import time
+
+from omarchy_setup.modules.doctor.core import shell_log_findings
 
 
 def run(*args):
@@ -15,7 +16,8 @@ def validate_log(log):
     lines = [line for line in log.splitlines() if line.strip() and not line.startswith("-- ")]
     if not lines:
         raise RuntimeError("shell log unavailable: cannot establish runtime health")
-    if re.search(r"ReferenceError|TypeError|Cannot assign|Unable to assign|is not a type|Failed to load", log, re.I):
+    suspicious, _known_stock = shell_log_findings(log)
+    if suspicious:
         raise RuntimeError("shell runtime errors detected; inspect shell-runtime.log")
 
 
