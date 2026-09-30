@@ -15,6 +15,36 @@ from omarchy_setup.modules.programs.core import (
 
 
 class ProgramBackendTests(unittest.TestCase):
+    @patch("omarchy_setup.modules.programs.core.subprocess.run")
+    def test_package_preflight_is_noop_when_sync_database_is_available(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess(("pacman",), 0, "", "")
+        backend = OmarchyProgramBackend()
+
+        backend.prepare_system_packages()
+
+        run.assert_called_once_with(
+            ("pacman", "-Sl", "core"),
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    @patch("omarchy_setup.modules.programs.core.subprocess.run")
+    def test_package_preflight_refreshes_and_rechecks_missing_sync_database(self, run) -> None:
+        run.side_effect = (
+            subprocess.CompletedProcess(("pacman",), 1, "", ""),
+            subprocess.CompletedProcess(("sudo", "pacman"), 0, "", ""),
+            subprocess.CompletedProcess(("pacman",), 0, "", ""),
+        )
+        backend = OmarchyProgramBackend()
+
+        backend.prepare_system_packages()
+
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            ("sudo", "pacman", "-Sy", "--noconfirm"),
+        )
+
     def test_mamba_shell_block_is_idempotent_and_disables_prompt_clobbering(self) -> None:
         with self.subTest("temporary startup file"):
             with tempfile.TemporaryDirectory() as directory:

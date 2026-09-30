@@ -17,6 +17,7 @@ class FakeBackend:
         self.installed = set(installed or ())
         self.fail_verification = fail_verification
         self.installs: list[str] = []
+        self.package_preparations = 0
         self.defaults: list[str] = []
         self.logins: list[str] = []
 
@@ -25,6 +26,9 @@ class FakeBackend:
 
     def is_installed(self, program: Program, paths: ProgramPaths) -> bool:
         return program.name in self.installed
+
+    def prepare_system_packages(self) -> None:
+        self.package_preparations += 1
 
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
         self.installs.append(program.name)
@@ -78,6 +82,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(backend.defaults, [])
         self.assertEqual(backend.logins, [])
+        self.assertEqual(backend.package_preparations, 1)
         self.assertIn("[3/10] Installing Mamba", output)
 
     def test_login_and_default_hooks_run_for_installed_program(self) -> None:
@@ -86,6 +91,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         self.execute("zen", backend, login=True, set_defaults=True)
 
         self.assertEqual(backend.installs, [])
+        self.assertEqual(backend.package_preparations, 0)
         self.assertEqual(backend.defaults, ["zen"])
         self.assertEqual(backend.logins, ["zen"])
 
@@ -119,9 +125,18 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(backend.installs, [])
+        self.assertEqual(backend.package_preparations, 0)
         self.assertEqual(backend.defaults, [])
         self.assertEqual(backend.logins, [])
         self.assertIn("Dry run complete", output)
+
+    def test_mamba_only_does_not_prepare_system_package_databases(self) -> None:
+        backend = FakeBackend()
+
+        self.execute("mamba", backend)
+
+        self.assertEqual(backend.installs, ["mamba"])
+        self.assertEqual(backend.package_preparations, 0)
 
     def test_declined_plan_changes_nothing(self) -> None:
         backend = FakeBackend()
@@ -142,6 +157,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(backend.installs, [])
+        self.assertEqual(backend.package_preparations, 0)
 
     def test_failed_verification_stops_before_login(self) -> None:
         backend = FakeBackend(fail_verification="spotify")

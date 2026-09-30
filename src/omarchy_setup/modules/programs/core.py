@@ -151,6 +151,8 @@ class Backend(Protocol):
 
     def is_installed(self, program: Program, paths: ProgramPaths) -> bool: ...
 
+    def prepare_system_packages(self) -> None: ...
+
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None: ...
 
     def set_default(self, program: Program) -> None: ...
@@ -206,6 +208,29 @@ class OmarchyProgramBackend:
                 for directory in (paths.data_home / "applications", Path("/usr/share/applications"))
             )
         raise ProgramError(f"{program.name} has no installation detector")
+
+    def prepare_system_packages(self) -> None:
+        # A newly installed Omarchy VM can have a valid local package database
+        # but no repository sync databases yet. Omarchy's supported installers
+        # use pacman/yay without refreshing them, so establish that prerequisite
+        # only when it is missing. Avoid a routine refresh on configured systems.
+        probe = subprocess.run(
+            ("pacman", "-Sl", "core"),
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if probe.returncode == 0:
+            return
+        self._run(("sudo", "pacman", "-Sy", "--noconfirm"), capture=False)
+        verify = subprocess.run(
+            ("pacman", "-Sl", "core"),
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if verify.returncode != 0:
+            raise ProgramError("Pacman repository databases are unavailable after refresh")
 
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
         if program.kind == "mamba":
@@ -402,6 +427,10 @@ def run_install(
         if not quiet:
             print("Cancelled. No programs changed or opened.", file=stdout)
         return 0
+
+    if any(program.kind != "mamba" for program in missing):
+        display.message("Preparing Pacman repository databases.")
+        backend.prepare_system_packages()
 
     total = len(programs)
     for index, program in enumerate(programs, start=1):
