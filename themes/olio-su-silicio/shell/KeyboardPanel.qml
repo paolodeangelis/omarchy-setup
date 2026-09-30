@@ -54,7 +54,14 @@ PanelWindow {
   property bool popoutSwitching: false
   property bool popoutSwitchClosing: false
   property bool focusPrimed: false
+  property bool spatialAnimationEnabled: false
+  property bool visualOpenPending: false
+  property real visualX: 0
+  property real visualY: 0
+  property real visualWidth: 1
+  property real visualHeight: 1
   readonly property real liquidSmoothing: Math.max(28, Style.cornerRadius * 2)
+  readonly property int spatialDuration: 300
 
   // Item that should take keyboard focus once the panel maps. Typically a
   // PanelKeyCatcher inside the panel content. Layer-shell grants focus to the
@@ -103,7 +110,10 @@ PanelWindow {
     ? (focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
     : WlrKeyboardFocus.None
 
-  onBackingWindowVisibleChanged: beginFocusPrime()
+  onBackingWindowVisibleChanged: {
+    beginFocusPrime()
+    startPendingVisualOpen()
+  }
 
   // Full-screen layer-shell. The visible card is positioned inside via
   // `cardOrigin`. The `mask` below makes the bar area click-through (so
@@ -249,6 +259,67 @@ PanelWindow {
     return Qt.point(Math.round(x), Math.round(y))
   }
 
+  function transitionGeometry() {
+    if (!bar || typeof bar.popoutTransitionFor !== "function") return null
+    return bar.popoutTransitionFor(screen ? screen.name : "")
+  }
+
+  function reportVisualGeometry() {
+    if (!open || !liquidCardFitsBar || !bar || typeof bar.reportPopoutGeometry !== "function") return
+    bar.reportPopoutGeometry(coordinatorKey, {
+      screenName: screen ? screen.name : "",
+      x: visualX, y: visualY, width: visualWidth, height: visualHeight
+    })
+  }
+
+  function settleVisualGeometry() {
+    visualX = cardOrigin.x
+    // liquidViewport already starts at the top bar's lower edge. Keep both
+    // fixed and floating top-bar cards in that local coordinate space; using
+    // cardOrigin.y here adds bar height twice and enlarges the configured gap.
+    visualY = barPos === "top" ? gap : cardOrigin.y
+    visualWidth = contentWidth
+    visualHeight = contentHeight
+  }
+
+  function beginVisualOpen(previous) {
+    spatialAnimationEnabled = false
+    if (liquidCardFitsBar && previous
+        && Number(previous.width) > 0 && Number(previous.height) > 0) {
+      visualX = Number(previous.x)
+      visualY = Number(previous.y)
+      visualWidth = Number(previous.width)
+      visualHeight = Number(previous.height)
+    } else {
+      visualX = cardOrigin.x
+      visualWidth = contentWidth
+      visualHeight = contentHeight
+      visualY = liquidCardFitsBar
+        ? -visualHeight
+        : (barPos === "top" ? gap : cardOrigin.y)
+    }
+    visualOpenPending = true
+    startPendingVisualOpen()
+  }
+
+  function startPendingVisualOpen() {
+    if (!visualOpenPending || !open || !backingWindowVisible) return
+    visualOpenPending = false
+    Qt.callLater(function() {
+      if (!root.open) return
+      root.spatialAnimationEnabled = root.liquidCardFitsBar
+      root.settleVisualGeometry()
+    })
+  }
+
+  onCardOriginChanged: if (open && !popoutSwitching) settleVisualGeometry()
+  onContentWidthChanged: if (open && !popoutSwitching) settleVisualGeometry()
+  onContentHeightChanged: if (open && !popoutSwitching) settleVisualGeometry()
+  onVisualXChanged: reportVisualGeometry()
+  onVisualYChanged: reportVisualGeometry()
+  onVisualWidthChanged: reportVisualGeometry()
+  onVisualHeightChanged: reportVisualGeometry()
+
 
   // --- popout coordination (same-bar single-popout model) -----------------
 
@@ -264,16 +335,21 @@ PanelWindow {
     } else {
       focusPrimeTimer.stop()
       focusPrimed = false
+      visualOpenPending = false
     }
     if (!bar) return
     if (open) {
       popoutSwitchClosing = false
       popoutSwitching = bar.activePopout && bar.activePopout !== coordinatorKey
+      var previousGeometry = popoutSwitching ? transitionGeometry() : null
       bar.requestPopout(coordinatorKey)
+      beginVisualOpen(previousGeometry)
       if (popoutSwitching) popoutSwitchTimer.restart()
     } else {
       popoutSwitchClosing = !!(owner && owner.popoutSwitchClosing)
       popoutSwitching = false
+      spatialAnimationEnabled = liquidCardFitsBar && !popoutSwitchClosing
+      if (spatialAnimationEnabled) visualY = -visualHeight
       if (bar.activePopout === coordinatorKey) bar.releasePopout(coordinatorKey)
       if (popoutSwitchClosing) closeSwitchTimer.restart()
     }
@@ -291,13 +367,15 @@ PanelWindow {
 
   Timer {
     id: popoutSwitchTimer
-    interval: 150
+    interval: root.spatialDuration
     onTriggered: root.popoutSwitching = false
   }
 
   Timer {
     id: closeSwitchTimer
-    interval: 1
+    // Keep the old background mapped until the incoming Wayland surface has
+    // presented its first frame. Its content fades immediately below.
+    interval: 60
     onTriggered: root.popoutSwitchClosing = false
   }
 
@@ -454,24 +532,37 @@ PanelWindow {
       id: card
       readonly property real targetX: root.cardOrigin.x
       readonly property real targetY: root.barPos === "top" ? root.gap : root.cardOrigin.y
-      x: targetX
-      y: root.liquidCardFitsBar
-        ? ((root.open || root.popoutSwitching) ? targetY : -height)
-        : targetY
-      width: root.contentWidth
-      height: root.contentHeight
+      x: root.visualX
+      y: root.visualY
+      width: root.visualWidth
+      height: root.visualHeight
       group: root.liquidCardFitsBar ? liquidGroup : null
       radius: Math.max(16, Style.cornerRadius)
       deformScale: 0.00002
-      opacity: root.open || root.popoutSwitching ? 1.0 : 0
+      opacity: root.open || root.popoutSwitching || root.popoutSwitchClosing ? 1.0 : 0
 
-      Behavior on y {
-        enabled: root.liquidCardFitsBar && !root.popoutSwitching
+      Behavior on x {
+        enabled: root.liquidCardFitsBar && root.spatialAnimationEnabled
         NumberAnimation {
-          duration: root.open ? 230 : 180
-          easing.type: root.open ? Easing.OutExpo : Easing.InCubic
+          duration: root.spatialDuration
+          easing.type: Easing.BezierSpline
+          easing.bezierCurve: [0.38, 1.05, 0.22, 1, 1, 1]
         }
       }
+
+      Behavior on y { enabled: root.liquidCardFitsBar && root.spatialAnimationEnabled; NumberAnimation {
+        duration: root.open ? root.spatialDuration : 180
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: root.open ? [0.38, 1.05, 0.22, 1, 1, 1] : [0.4, 0, 1, 1, 1, 1]
+      } }
+      Behavior on width { enabled: root.liquidCardFitsBar && root.spatialAnimationEnabled; NumberAnimation {
+        duration: root.spatialDuration; easing.type: Easing.BezierSpline
+        easing.bezierCurve: [0.38, 1.05, 0.22, 1, 1, 1]
+      } }
+      Behavior on height { enabled: root.liquidCardFitsBar && root.spatialAnimationEnabled; NumberAnimation {
+        duration: root.spatialDuration; easing.type: Easing.BezierSpline
+        easing.bezierCurve: [0.38, 1.05, 0.22, 1, 1, 1]
+      } }
 
       Behavior on opacity {
         enabled: !root.popoutSwitching && !root.popoutSwitchClosing
@@ -489,13 +580,13 @@ PanelWindow {
         id: contentHolder
         anchors.fill: parent
         anchors.margins: root.padding
-        opacity: root.popoutSwitching ? (root.open ? 1.0 : 0) : 1.0
+        opacity: root.open ? 1.0 : 0.0
 
         transform: Matrix4x4 { matrix: card.deformMatrix }
 
         Behavior on opacity {
-          enabled: root.popoutSwitching
-          NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+          enabled: root.popoutSwitching || root.popoutSwitchClosing
+          NumberAnimation { duration: 70; easing.type: Easing.OutCubic }
         }
       }
     }

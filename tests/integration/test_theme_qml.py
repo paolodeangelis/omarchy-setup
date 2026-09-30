@@ -20,9 +20,17 @@ class ThemeQmlTests(unittest.TestCase):
             imports = root / "imports"
             ui = imports / "qs" / "Ui"
             ui.mkdir(parents=True)
-            # Stock API plus exactly the geometry extension used by the overlay.
+            # Stock API plus exactly the compatibility extensions installed by
+            # the overlay builder.
             api = STOCK_API.read_text().replace("  property int barSize: 0\n",
                 "  property int barSize: 0\n  property var barMargins: ({})\n", 1)
+            api = api.replace(
+                "  property var _releasePopout: null\n",
+                "  property var _releasePopout: null\n"
+                "  property var _reportPopoutGeometry: null\n"
+                "  property var _popoutTransitionFor: null\n",
+                1,
+            )
             (ui / "PluginBarApi.qml").write_text(api)
             (ui / "qmldir").write_text("module qs.Ui\nPluginBarApi 1.0 PluginBarApi.qml\n")
             module = imports / "OlioTest"

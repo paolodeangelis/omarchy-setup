@@ -37,6 +37,8 @@ Loader {
     _unregisterClickTarget: host.sourceBar._unregisterClickTarget
     _requestPopout: host.sourceBar._requestPopout
     _releasePopout: host.sourceBar._releasePopout
+    _reportPopoutGeometry: host.sourceBar._reportPopoutGeometry
+    _popoutTransitionFor: host.sourceBar._popoutTransitionFor
     _switchPanelFrom: host.sourceBar._switchPanelFrom
     _targetBelongsToWindow: host.sourceBar._targetBelongsToWindow
     _moduleWidgets: host.sourceBar._moduleWidgets

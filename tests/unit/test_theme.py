@@ -81,6 +81,10 @@ class ThemeTests(unittest.TestCase):
         (ui / "PluginBarApi.qml").write_text(
             "import QtQuick\nQtObject {\n"
             "  property int barSize: 0\n"
+            "  property var _releasePopout: null\n"
+            "  function switchPanelFrom(owner, direction) {\n"
+            "    return false\n"
+            "  }\n"
             "}\n"
         )
         host_files = {
@@ -151,6 +155,10 @@ class ThemeTests(unittest.TestCase):
             self.assertTrue((self.paths.overlay_shell / "Ui" / "KeyboardPanel.qml").is_file())
             self.assertIn(
                 "property var barMargins:",
+                (self.paths.overlay_shell / "Ui" / "PluginBarApi.qml").read_text(),
+            )
+            self.assertIn(
+                "function reportPopoutGeometry(",
                 (self.paths.overlay_shell / "Ui" / "PluginBarApi.qml").read_text(),
             )
             self.assertIn(

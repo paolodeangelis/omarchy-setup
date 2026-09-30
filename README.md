@@ -241,8 +241,11 @@ The earlier audit found a mismatch between the Reddit 0.37 announcement and
 then-published 0.35.12 code. The 2026-09-29 audit inspected `a213d722` (0.39.0):
 edge-dependent geometry is now source-verifiable. Its built-in popup morphing
 and third-party compatibility paths are different, however. See the
-[fixed-popup comparison and staged plan](docs/fixed-popup-animation-plan.md).
-No new animation code was applied. Olio remains
+[fixed-popup comparison and evidence](docs/fixed-popup-animation-plan.md).
+Olio now carries only the fixed-mode motion lesson: the bar retains numeric
+popup geometry and a newly opened panel interpolates from that rectangle while
+plugin ownership and services remain unchanged. Floating mode does not use this
+path. Olio remains
 version-gated and must pass pinned, latest, and configured-upgrade VM tests
 before an Omarchy update is considered safe. Companion plugins are currently
 installed from their upstream default branches on first setup, so a fresh

@@ -98,6 +98,11 @@ Item {
   property bool tooltipShown: false
   property int tooltipRequest: 0
   property var activePopout: null
+  // Last rendered fixed-popup rectangle. A newly opened panel can start from
+  // this exact geometry even though each plugin owns a separate layer surface.
+  // Numeric geometry only: plugin content and service objects never cross the
+  // scoped bar facade.
+  property var popupTransitionGeometry: null
   property var barDragSource: null
   property var barDragTarget: null
   property var barDragTargetGeometry: null
@@ -295,6 +300,12 @@ Item {
       _unregisterClickTarget: function(target) { root.unregisterPluginClickTarget(key, target) },
       _requestPopout: function(owner) { root.requestPluginPopout(key, owner) },
       _releasePopout: function(owner) { root.releasePluginPopout(key, owner) },
+      _reportPopoutGeometry: function(owner, geometry) {
+        root.reportPopoutGeometry(owner, geometry)
+      },
+      _popoutTransitionFor: function(screenName) {
+        return root.popoutTransitionFor(screenName)
+      },
       _switchPanelFrom: function(owner, direction) { return root.switchPanelFrom(owner, direction) },
       _targetBelongsToWindow: function(target, window) { return root.targetBelongsToWindow(target, window) },
       _moduleWidgets: function(requestedId) {
@@ -584,6 +595,27 @@ Item {
       else if ("close" in activePopout) activePopout.close()
     }
     activePopout = owner
+  }
+
+  function reportPopoutGeometry(owner, geometry) {
+    if (!liquidStyle || activePopout !== owner || !geometry) return
+    var values = [geometry.x, geometry.y, geometry.width, geometry.height]
+    for (var i = 0; i < values.length; i++) {
+      if (!Number.isFinite(Number(values[i]))) return
+    }
+    if (Number(geometry.width) <= 0 || Number(geometry.height) <= 0) return
+    popupTransitionGeometry = {
+      screenName: String(geometry.screenName || ""),
+      x: Number(geometry.x), y: Number(geometry.y),
+      width: Number(geometry.width), height: Number(geometry.height)
+    }
+  }
+
+  function popoutTransitionFor(screenName) {
+    var geometry = popupTransitionGeometry
+    if (!liquidStyle || !activePopout || !geometry) return null
+    if (String(geometry.screenName || "") !== String(screenName || "")) return null
+    return geometry
   }
 
   function releasePopout(owner) {

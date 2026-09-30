@@ -618,6 +618,29 @@ def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> N
                 1,
             )
         )
+        plugin_api_text = plugin_api.read_text()
+    if "function reportPopoutGeometry(" not in plugin_api_text:
+        markers = {
+            "  property var _releasePopout: null\n": (
+                "  property var _releasePopout: null\n"
+                "  property var _reportPopoutGeometry: null\n"
+                "  property var _popoutTransitionFor: null\n"
+            ),
+            "  function switchPanelFrom(owner, direction) {\n": (
+                "  function reportPopoutGeometry(owner, geometry) {\n"
+                "    if (_reportPopoutGeometry) _reportPopoutGeometry(owner, geometry)\n"
+                "  }\n\n"
+                "  function popoutTransitionFor(screenName) {\n"
+                "    return _popoutTransitionFor ? _popoutTransitionFor(String(screenName || \"\")) : null\n"
+                "  }\n\n"
+                "  function switchPanelFrom(owner, direction) {\n"
+            ),
+        }
+        for marker, replacement in markers.items():
+            if plugin_api_text.count(marker) != 1:
+                raise ThemeError("installed PluginBarApi has no popup transition compatibility marker")
+            plugin_api_text = plugin_api_text.replace(marker, replacement, 1)
+        plugin_api.write_text(plugin_api_text)
 
 
 def _build_overlay(paths: ThemePaths, backend: ThemeBackend, staging: Path) -> str:

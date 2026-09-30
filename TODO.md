@@ -43,6 +43,7 @@
 - [x] Restore Notification Center own-service access through host-owned widget construction; visually verify fresh messages in both modes
 - [x] Align notification toast offsets with the accepted bar popups in both modes; preserve notification borders
 - [x] Audit Omacale 0.39.0 popup lifecycle and document a fixed-only compatibility-safe animation plan (source analysis, not measured video proof)
+- [x] Add fixed-only retained popup geometry and spatial morphing; locally verify rapid reversal, floating gap, Notification Center, Spaces preview, menu, and OSD
 - [ ] Assets management
 - [ ] Framework-specific configuration
 
@@ -57,6 +58,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Validate overlay reuse against all relevant upstream changes and verify complete stock restore
 - [ ] Make doctor detect QML property-assignment errors and distinguish missing evidence from healthy checks
 - [ ] Add real QML/VM acceptance for both styles, third-party previews, service-backed content, keyboard menus, and OSD
+- [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
 - [ ] Triage one-time shell-start warnings after companion rescan (stock Network/Bluetooth null bar API, Olio delayed target, and duplicate Spaces IPC handler); interactions are clean afterward, but doctor currently reports the startup history

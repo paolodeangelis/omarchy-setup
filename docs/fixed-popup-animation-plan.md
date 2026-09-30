@@ -1,17 +1,17 @@
-# Fixed popup motion: comparison and implementation plan
+# Fixed popup motion: comparison, implementation, and evidence
 
 Source audit: 2026-09-29. Olio baseline: `e8e15a8`. Omacale:
 `a213d722f9884192748249909506f71ccd2b6044`, manifest **0.39.0**.
-This is a plan, not an animation implementation or a measured smoothness result.
-No desktop configuration changed during this audit.
+The comparison below motivated a narrow Olio implementation. It is not an
+Omacale port and does not claim equivalent rendering architecture.
 
 ## What actually differs
 
 | Mechanism | Omacale | Olio fixed baseline |
 | --- | --- | --- |
-| Background lifetime | Persistent per-screen frame and popup rectangle | Separate `KeyboardPanel` surfaces and blob groups |
+| Background lifetime | Persistent per-screen frame and popup rectangle | Separate `KeyboardPanel` surfaces; the last numeric rectangle is retained by the bar |
 | Opening | Animated offset slides clipped content from behind bar | Card Y slides, with independent opacity animation |
-| Switching | Persistent width, height and along-bar position interpolate to new targets | X/width/height bind directly; switching disables Y animation and uses timed opacity handoff |
+| Switching | Persistent width, height and along-bar position interpolate to new targets | The incoming surface starts at the retained rectangle and interpolates X/Y/width/height; the outgoing background is retained briefly for presentation handoff |
 | Placement | Final content size determines target, separate from animated size | Each new panel computes its own target |
 | Joining | One shader merges frame and attached rectangles with circular fillets | Each panel models a bar segment and card, below the real bar |
 | Third-party panels | Separate compatibility hosting path | Existing plugin panels through version-sensitive overlay |
@@ -30,10 +30,10 @@ Evidence:
 - [blob.frag](https://github.com/AyushKr2003/omacale/blob/a213d722f9884192748249909506f71ccd2b6044/omacale.bar/shaders/blob.frag):
   circular smooth-min, edge attachment and corner treatment. The popup background
   extends behind the bar so its rendered join does not detach during movement.
-- Olio [`KeyboardPanel.qml`](../themes/olio-su-silicio/shell/KeyboardPanel.qml):
-  switching timers around 292; `BlobRect card` around 453; direct X/size bindings,
-  Y behavior disabled during handoff, separate content fade. That explains why
-  our current code cannot interpolate one persistent rectangle across panels.
+- Olio [`KeyboardPanel.qml`](../themes/olio-su-silicio/shell/KeyboardPanel.qml)
+  stores only finite numeric geometry through the scoped bar API. Plugin content
+  and service objects stay in their existing owners. Floating mode bypasses this
+  fixed-only transition path.
 
 Inference: persistent geometry plus coordinated clipping/lifetime is the useful
 lesson—not adopting all of Omacale, increasing radius, or only changing easing.
@@ -65,46 +65,36 @@ Correction to the previous comparison: the earlier 0.35.12/source mismatch was
 time-specific. This inspected 0.39.0 revision implements edge-dependent geometry.
 The Reddit 0.37 announcement alone remains insufficient compatibility evidence.
 
-## Proposed work, in order
+## Implemented scope
 
-1. **Capture baseline in a disposable pinned VM.** Same scale, background,
-   opacity and popup sequence. Test the actual radar bar click, not its standalone
-   window. Establish current failures separately from proposed motion.
-2. **Define one small fixed-mode lifecycle contract.** Per screen, expose stable
-   panel identity, anchor, final content size, open/close state and ownership.
-   Preserve scoped services, focus, Escape/Tab and dismiss behavior. Feature-detect
-   it; unsupported hosts/panels use ordinary rounded detached popups. Keep this
-   adapter isolated and version-checked, ideally upstreamable.
-3. **Prototype persistent background only.** Retain current geometry during A→B;
-   animate X/width/height from current interpolated values to B's final target.
-   Opening from closed should start at the clicked anchor, not the previous
-   panel's position. Wait for valid layout without relying on an arbitrary timer.
-   Do not reparent arbitrary plugin content or replace its service facade.
-4. **Coordinate presentation.** One owner decides background, clipping and
-   content visibility. Remove the old handoff timers only after the equivalent
-   behavior is proven. One effective surface colour/alpha must cover the join;
-   overlapping translucent surfaces can produce a seam even with equal settings.
-   If the existing separate content windows cannot follow reliably, stop the
-   prototype and propose the necessary shared-host API—do not patch each plugin.
-5. **Gate, then consider adoption.** Run pinned, latest and configured-upgrade
-   VMs. Prove missing-capability fallback and full restore independently. Floating
-   mode must stay unchanged. Only then request visual acceptance and implement
-   the minimal reviewed patch. This task does not authorize steps 1–5 on the host.
+The Olio bar now retains the last rendered fixed-popup rectangle per screen.
+`KeyboardPanel` feature-detects that scoped API and animates the incoming card
+from the retained X/Y/width/height to its own target. A 60ms background-only
+handoff bridges creation of the new Wayland surface; plugin content fades
+independently. No plugin source is patched or reparented. The overlay installer
+adds the two optional API functions only after its existing fingerprint checks.
 
-## Required proof before calling it finished
+Floating mode keeps detached rounded popups and does not use retained liquid
+geometry. A regression assertion protects its literal top-bar gap from adding
+the bar height twice.
 
-- Closed→clock; clock→audio→network→notification; interrupt midway and reverse;
-  repeated clicks; Escape/Tab; workspace switch while open; left/right edges;
-  content resizing after load; actual radar preview and Spaces hover/settings.
-- Record at a stated frame rate with timestamps. Inspect every transition frame
-  for gaps, flashes, doubled backgrounds, clipping and unexpected origin jumps.
-  Report dropped frames; don't infer them from a static screenshot.
+## Evidence and remaining proof
+
+- Local 60fps recording exercised closed→clock and rapid
+  clock→audio→network→audio reversal. A 20fps contact sheet showed no empty
+  background frame or restart from the top.
+- Fixed Notification Center, Spaces preview, OSD, and Super+Escape menu were
+  visually checked. `doctor --ui` passed all 12 menu routes and the OSD smoke.
+- Floating mode was reapplied and visually checked after the gap regression fix;
+  fixed mode was restored as the active default.
 - Test opaque and translucent settings. Keep geometry and colour baselines fixed
   while comparing motion. Verify no content painted outside its background.
-- Preserve notifications/archive loading, launcher/menu and keyboard OSD. Require
-  available logs and reject QML assignment/load errors. Test stock fallback and
-  restoration without the custom API present.
+- Pinned/latest/configured-upgrade VM acceptance, actual pointer-driven radar
+  preview and Spaces hover, translucent comparisons, Tab/repeated-click stress,
+  multi-output behavior, and stock fallback/restoration remain required before
+  claiming future-release compatibility.
 
-Current blockers: no registered VM runner; actual radar/Spaces interaction driver
-and animation recordings remain missing. Existing local visual acceptance is
-valuable but does not establish future-update compatibility.
+The hosted KVM workflow now reaches repository setup inside the guest, but its
+first full run exposed an empty Pacman sync database. That preflight was fixed;
+a passing system run is still required. Local evidence does not establish
+future-update compatibility.

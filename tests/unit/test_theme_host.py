@@ -10,6 +10,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which("node"), "Node is required for QML JavaScript behavior tests")
 class ThemeHostTests(unittest.TestCase):
+    def test_fixed_popups_share_numeric_transition_geometry(self):
+        source = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn("function reportPopoutGeometry(owner, geometry)", source)
+        self.assertIn("activePopout !== owner", source)
+        self.assertIn("function popoutTransitionFor(screenName)", source)
+        panel = (ROOT / "themes/olio-su-silicio/shell/KeyboardPanel.qml").read_text()
+        self.assertIn("visualWidth = Number(previous.width)", panel)
+        self.assertIn('visualY = barPos === "top" ? gap : cardOrigin.y', panel)
+        self.assertIn("Behavior on width", panel)
+        self.assertIn("Behavior on height", panel)
+        self.assertIn("typeof bar.popoutTransitionFor", panel)
+
     def test_bar_commands_preserve_overlay_environment(self):
         source = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         start = source.index("  function run(command) {")
