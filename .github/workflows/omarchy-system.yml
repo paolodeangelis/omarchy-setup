@@ -32,25 +32,24 @@ jobs:
       - name: Explain skipped candidate
         if: steps.release.outputs.run != 'true'
         run: echo 'No newer official release than the configured baseline. No VM compatibility claim.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Require configured VM capacity
-        if: steps.release.outputs.run == 'true'
-        env:
-          RUNNER_ENABLED: ${{ vars.OMARCHY_VM_RUNNER_ENABLED }}
-        run: |
-          if [[ "$RUNNER_ENABLED" != true ]]; then
-            echo '::error::No configured disposable KVM runner. Follow tests/vm/README.md, then set OMARCHY_VM_RUNNER_ENABLED=true.'
-            exit 1
-          fi
   vm:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: [self-hosted, linux, x64, omarchy, kvm, disposable]
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     concurrency:
       group: omarchy-vm-machine
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
+      - name: Provision disposable VM host
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            qemu-system-x86 qemu-utils ovmf socat imagemagick \
+            tesseract-ocr tesseract-ocr-eng openssh-client
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
       - uses: actions/download-artifact@v4
         with:
           name: release-${{ inputs.mode }}

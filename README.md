@@ -1,5 +1,10 @@
 # omarchy-setup
 
+[![CI](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml)
+[![Pinned Omarchy VM](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml)
+![Pinned Omarchy target](https://img.shields.io/badge/Omarchy_pinned_target-4.0.4-6f42c1)
+![Latest Omarchy target](https://img.shields.io/badge/Omarchy_latest_target-4.0.4-6f42c1)
+
 Personal, reproducible setup and configuration framework for Omarchy.
 
 The goal is to reproduce my preferred Omarchy installation while keeping the configuration understandable, editable, testable, and safe to update.
@@ -285,6 +290,6 @@ Normal GitHub-hosted CI runs unit and fake-state integration tests on Ubuntu.
 Three manual VM workflows cover fresh pinned Omarchy, configured baseline
 upgraded to latest, and fresh latest. A release watcher dispatches candidate
 tests when a newer official release appears. They use the pinned official ISO
-harness and verified ISO checksums. A dedicated disposable KVM runner is
-required; these workflows have not yet established a passing compatibility run.
-See [runner setup, execution and coverage limits](tests/vm/README.md).
+harness, verified ISO checksums, and an ephemeral GitHub-hosted KVM runner.
+They have not yet established a passing system-compatibility run. See
+[runner execution and coverage limits](tests/vm/README.md).

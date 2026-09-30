@@ -1,4 +1,4 @@
-"""Run a reviewed official ISO harness on a dedicated, disposable KVM runner."""
+"""Run a reviewed official ISO harness on an ephemeral GitHub KVM runner."""
 import hashlib
 import json
 import os
@@ -19,12 +19,23 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
-def adapt_harness(text, upgrade):
-    # The dedicated runner is pre-provisioned. The harness must not install
-    # packages on it. Guest package operations remain inside the VM.
+def adapt_harness(text, upgrade, ovmf_code=None, ovmf_vars=None, image_command="magick"):
+    # The workflow provisions its ephemeral host. Guest package operations
+    # remain inside the VM.
     text = replace_once(text,
         "omarchy-pkg-add qemu-full edk2-ovmf socat imagemagick tesseract tesseract-data-eng",
         "# Runner prerequisites checked by omarchy-setup tests/vm/host.py")
+    if ovmf_code and ovmf_vars:
+        text = replace_once(text,
+            'OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"',
+            f'OVMF_CODE="{ovmf_code}"')
+        text = replace_once(text,
+            'OVMF_VARS_TEMPLATE="/usr/share/edk2/x64/OVMF_VARS.4m.fd"',
+            f'OVMF_VARS_TEMPLATE="{ovmf_vars}"')
+    if image_command != "magick":
+        if text.count("  magick ") != 2:
+            raise RuntimeError("official image conversion contract changed; review adapter")
+        text = text.replace("  magick ", f"  {image_command} ")
     # App installation can exceed upstream's 420-second per-test limit.
     text = replace_once(text,
         "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance",
@@ -47,20 +58,32 @@ def adapt_harness(text, upgrade):
     return text
 
 
+def first_file(candidates):
+    return next((path for path in map(Path, candidates) if path.is_file()), None)
+
+
 def main():
     repo = Path(__file__).resolve().parents[2]
     plan = json.loads(Path(sys.argv[1]).read_text())
     artifacts = repo / "vm-artifacts"
     artifacts.mkdir(exist_ok=True)
     (artifacts / "release.json").write_text(json.dumps(plan, indent=2))
-    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "self-hosted":
-        raise RuntimeError("requires a dedicated self-hosted Actions VM runner; never run on the workstation")
-    for command in ("qemu-system-x86_64", "qemu-img", "socat", "magick", "tesseract", "ssh", "curl", "git"):
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") not in {"github-hosted", "self-hosted"}:
+        raise RuntimeError("requires an ephemeral GitHub Actions VM runner; never run on the workstation")
+    image_command = "magick" if shutil.which("magick") else "convert"
+    for command in ("qemu-system-x86_64", "qemu-img", "socat", image_command, "tesseract", "ssh", "curl", "git"):
         if not shutil.which(command):
             raise RuntimeError(f"runner prerequisite missing: {command}")
-    for firmware in ("OVMF_CODE.4m.fd", "OVMF_VARS.4m.fd"):
-        if not Path("/usr/share/edk2/x64", firmware).is_file():
-            raise RuntimeError(f"runner firmware missing: {firmware}")
+    ovmf_code = first_file((
+        "/usr/share/edk2/x64/OVMF_CODE.4m.fd",
+        "/usr/share/OVMF/OVMF_CODE_4M.fd",
+    ))
+    ovmf_vars = first_file((
+        "/usr/share/edk2/x64/OVMF_VARS.4m.fd",
+        "/usr/share/OVMF/OVMF_VARS_4M.fd",
+    ))
+    if not ovmf_code or not ovmf_vars:
+        raise RuntimeError("runner OVMF 4M firmware missing")
     if not os.access("/dev/kvm", os.R_OK | os.W_OK):
         raise RuntimeError("runner has no usable KVM device")
     run("git", "rev-parse", "HEAD", stdout=(artifacts / "utility-commit.txt").open("w"))
@@ -87,7 +110,10 @@ def main():
         original.rename(source / "test/acceptance-upstream")
         original.write_text('#!/bin/bash\nexec bash "$(dirname "$0")/omarchy-setup/tests/vm/guest.sh" initial\n')
         program = harness / "bin/omarchy-iso-test"
-        program.write_text(adapt_harness(program.read_text(), plan["mode"] == "upgrade"))
+        program.write_text(adapt_harness(
+            program.read_text(), plan["mode"] == "upgrade",
+            str(ovmf_code), str(ovmf_vars), image_command,
+        ))
         shutil.copy2(program, artifacts / "adapted-harness.sh")
         iso = work / plan["iso_name"]
         run("curl", "--fail", "--location", "--retry", "3", plan["iso_url"], "--output", str(iso))
@@ -97,7 +123,8 @@ def main():
             raise RuntimeError("downloaded ISO checksum mismatch")
         try:
             with (artifacts / "harness.log").open("w") as log:
-                run("bash", str(program), str(iso), "--sync-omarchy", str(source), "--no-preview", stdout=log, stderr=subprocess.STDOUT)
+                run("bash", str(program), str(iso), "--sync-omarchy", str(source),
+                    "--memory", "5120", "--no-preview", stdout=log, stderr=subprocess.STDOUT)
         finally:
             # Do not upload test-runs wholesale: it contains private SSH keys,
             # guest disks, firmware state, and potentially credentials.

@@ -88,6 +88,23 @@ ssh_guest "tar -cf - /tmp/omarchy-acceptance"
             self.assertIn('ssh_guest "tar ', adapted)
             self.assertEqual('start_vm "$RUN_DIR/run.qcow2"' in adapted, upgrade)
 
+    def test_harness_adapter_supports_ubuntu_firmware_and_imagemagick(self):
+        fixture = '''omarchy-pkg-add qemu-full edk2-ovmf socat imagemagick tesseract tesseract-data-eng
+OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
+OVMF_VARS_TEMPLATE="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
+  magick "$shot" out.png
+  magick "$shot" gray.png
+ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance"
+  log "Collecting artifacts into $RUN_DIR"
+'''
+        adapted = self.host.adapt_harness(
+            fixture, False, "/usr/share/OVMF/OVMF_CODE_4M.fd",
+            "/usr/share/OVMF/OVMF_VARS_4M.fd", "convert",
+        )
+        self.assertIn('OVMF_CODE="/usr/share/OVMF/OVMF_CODE_4M.fd"', adapted)
+        self.assertIn('OVMF_VARS_TEMPLATE="/usr/share/OVMF/OVMF_VARS_4M.fd"', adapted)
+        self.assertEqual(adapted.count("  convert "), 2)
+
     def test_host_refuses_workstation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

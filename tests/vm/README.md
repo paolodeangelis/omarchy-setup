@@ -1,20 +1,16 @@
 # Disposable Omarchy system tests
 
-These workflows are implemented but have not yet passed a real VM run. No
-compatible runner was registered when checked. Unit tests do not certify them.
+These workflows use an ephemeral GitHub-hosted Ubuntu runner with KVM. They are
+implemented but remain unverified until a complete real VM run passes. Unit
+tests do not certify them.
 
 ## Run on GitHub
 
-Register a **dedicated disposable Arch/Omarchy runner**, not your workstation,
-with labels `self-hosted, linux, x64, omarchy, kvm, disposable`. Provision Python
-3.11+, Git, curl, OpenSSH, QEMU, edk2-ovmf, socat, ImageMagick, Tesseract and its
-English data. Give the runner access to `/dev/kvm`. The pinned official harness
-expects firmware under `/usr/share/edk2/x64/`. Allow ample disk space for an ISO,
-installed guest and application packages. The host adapter installs no packages.
-Guest internet access is required for repositories, AUR and weather data.
-
-Set repository Actions variable `OMARCHY_VM_RUNNER_ENABLED=true` only after
-registering that runner. Do not enable these privileged jobs for untrusted PRs.
+The shared workflow provisions QEMU, OVMF, ImageMagick and Tesseract on
+`ubuntu-24.04`, verifies `/dev/kvm`, and gives the guest 5 GiB. It adapts only
+reviewed host-path differences in the pinned official harness. The VM workflow
+is manual/release-triggered and never runs for pull requests. Guest internet
+access is required for repositories, AUR and weather data.
 
 In Actions, manually run:
 
