@@ -17,7 +17,9 @@ from omarchy_setup.modules.programs.core import (
 class ProgramBackendTests(unittest.TestCase):
     @patch("omarchy_setup.modules.programs.core.subprocess.run")
     def test_package_preflight_is_noop_when_sync_database_is_available(self, run) -> None:
-        run.return_value = subprocess.CompletedProcess(("pacman",), 0, "", "")
+        run.return_value = subprocess.CompletedProcess(
+            ("pacman",), 0, "core acl 2.3.2-1\n", ""
+        )
         backend = OmarchyProgramBackend()
 
         backend.prepare_system_packages()
@@ -25,8 +27,7 @@ class ProgramBackendTests(unittest.TestCase):
         run.assert_called_once_with(
             ("pacman", "-Sl", "core"),
             text=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
         )
 
     @patch("omarchy_setup.modules.programs.core.subprocess.run")
@@ -34,7 +35,7 @@ class ProgramBackendTests(unittest.TestCase):
         run.side_effect = (
             subprocess.CompletedProcess(("pacman",), 1, "", ""),
             subprocess.CompletedProcess(("sudo", "pacman"), 0, "", ""),
-            subprocess.CompletedProcess(("pacman",), 0, "", ""),
+            subprocess.CompletedProcess(("pacman",), 0, "core acl 2.3.2-1\n", ""),
         )
         backend = OmarchyProgramBackend()
 

@@ -217,19 +217,19 @@ class OmarchyProgramBackend:
         probe = subprocess.run(
             ("pacman", "-Sl", "core"),
             text=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
         )
-        if probe.returncode == 0:
+        # pacman returns zero even when the repository database is absent;
+        # require an actual package listing rather than trusting status alone.
+        if probe.returncode == 0 and probe.stdout.strip():
             return
         self._run(("sudo", "pacman", "-Sy", "--noconfirm"), capture=False)
         verify = subprocess.run(
             ("pacman", "-Sl", "core"),
             text=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
         )
-        if verify.returncode != 0:
+        if verify.returncode != 0 or not verify.stdout.strip():
             raise ProgramError("Pacman repository databases are unavailable after refresh")
 
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
