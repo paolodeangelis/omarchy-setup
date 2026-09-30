@@ -8,6 +8,8 @@ import os
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stdout
+from io import StringIO
 
 
 def module(name):
@@ -49,6 +51,17 @@ class VmCiTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.host.replace_once(text, "anchor", "replacement")
         self.assertEqual(self.host.replace_once("anchor", "anchor", "new"), "new")
+
+    def test_harness_output_is_live_and_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = Path(directory) / "harness.log"
+            live = StringIO()
+            with log_path.open("w") as log, redirect_stdout(live):
+                self.host.run_streamed(
+                    (sys.executable, "-c", "print('vm progress', flush=True)"), log
+                )
+            self.assertEqual(live.getvalue(), "vm progress\n")
+            self.assertEqual(log_path.read_text(), "vm progress\n")
 
     def test_reject_unknown_mode(self):
         with self.assertRaises(ValueError):

@@ -13,6 +13,29 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 
 
+def run_streamed(args, log):
+    """Mirror a long-running command to Actions output and its artifact log."""
+    process = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    try:
+        for line in process.stdout:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            log.write(line)
+            log.flush()
+    finally:
+        process.stdout.close()
+    returncode = process.wait()
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, args)
+
+
 def replace_once(text, old, new):
     if text.count(old) != 1:
         raise RuntimeError("official harness contract changed; review adapter before running")
@@ -123,8 +146,8 @@ def main():
             raise RuntimeError("downloaded ISO checksum mismatch")
         try:
             with (artifacts / "harness.log").open("w") as log:
-                run("bash", str(program), str(iso), "--sync-omarchy", str(source),
-                    "--memory", "5120", "--no-preview", stdout=log, stderr=subprocess.STDOUT)
+                run_streamed(("bash", str(program), str(iso), "--sync-omarchy", str(source),
+                    "--memory", "5120", "--no-preview"), log)
         finally:
             # Do not upload test-runs wholesale: it contains private SSH keys,
             # guest disks, firmware state, and potentially credentials.
