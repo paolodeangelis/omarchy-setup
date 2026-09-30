@@ -218,6 +218,11 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "TypeError: Cannot read property 'foreground' of null"
         )
 
+    def test_desktop_ocr_matching_ignores_capitalization_only(self):
+        desktop = module("desktop")
+        self.assertTrue(desktop.text_visible("G shutdown", "Shutdown"))
+        self.assertFalse(desktop.text_visible("System menu", "Shutdown"))
+
     def test_guest_acceptance_is_project_focused(self):
         guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
         self.assertNotIn("acceptance-upstream", guest)

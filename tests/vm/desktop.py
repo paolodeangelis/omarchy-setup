@@ -21,6 +21,11 @@ def validate_log(log):
         raise RuntimeError("shell runtime errors detected; inspect shell-runtime.log")
 
 
+def text_visible(text, expected):
+    """Match OCR text without treating capitalization noise as a UI failure."""
+    return expected.casefold() in text.casefold()
+
+
 def capture_panel(output, plugin, delay=2):
     try:
         run("omarchy-shell", "shell", "summon", plugin)
@@ -73,7 +78,7 @@ def main():
         run("grim", str(menu))
         menu_text = run("tesseract", str(menu), "stdout")
         (output / "system-menu-ocr.txt").write_text(menu_text)
-        if "Shutdown" not in menu_text:
+        if not text_visible(menu_text, "Shutdown"):
             raise RuntimeError("system menu content not visible; inspect screenshot/OCR")
     finally:
         run("omarchy-menu", "close")
