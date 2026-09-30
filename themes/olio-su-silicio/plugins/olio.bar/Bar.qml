@@ -2019,10 +2019,13 @@ Item {
       property var host: null
       property var loadedComponent: null
       function reload() {
+        // A queued reload may outlive its delegate while the shell restarts.
+        if (!root || !slot) return
         if (slot.useHostedWidget && host && loadedComponent === slot.registryComponent) return
         if (host) { host.destroy(); host = null }
         loadedComponent = null
         if (!slot.useHostedWidget) return
+        if (!root.shell || typeof root.shell.createBarWidget !== "function") return
         host = root.shell.createBarWidget(slot.moduleName, hostedLoader,
           root.pluginBarApiFor(slot.pluginApiId, slot.moduleName, true))
         if (host) {

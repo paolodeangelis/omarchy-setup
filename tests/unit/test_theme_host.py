@@ -14,6 +14,8 @@ class ThemeHostTests(unittest.TestCase):
         bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         self.assertIn("function(target) { if (root) root.hideTooltip(target) }", bar)
         self.assertIn("if (!target || !root) return", bar)
+        self.assertIn("if (!root || !slot) return", bar)
+        self.assertIn('if (!root.shell || typeof root.shell.createBarWidget !== "function") return', bar)
         hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)

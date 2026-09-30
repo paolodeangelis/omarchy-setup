@@ -79,7 +79,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Add non-mutating pre-commit checks and matching CI gate, including Actions lint and fast fixture tests
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
 - [x] Implement separate pinned/latest/configured-upgrade workflows, release watcher, verified ISO resolver and guarded official-harness adapter; local planning tests pass
-- [ ] Run Omarchy 4.0.4 disposable VM workflow on the GitHub-hosted KVM runner; adapter tests pass but complete guest execution is not yet established
+- [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
 - [ ] Run fresh latest-stable Omarchy VM workflow when newer than baseline; currently latest equals 4.0.4
 - [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates

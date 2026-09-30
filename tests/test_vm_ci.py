@@ -89,6 +89,41 @@ class VmCiTests(unittest.TestCase):
 
     def test_harness_adapter_keeps_disk_and_tar_without_tty(self):
         fixture = '''omarchy-pkg-add qemu-full edk2-ovmf socat imagemagick tesseract tesseract-data-eng
+wait_for_ssh() {
+  local timeout="$1" failure_name="${2:-failure-session-ssh-timeout}" waited=0
+  while ! ssh_guest true 2>/dev/null; do
+    if ((waited >= timeout)); then
+      capture_console "$failure_name"
+      echo "Timed out after ${timeout}s waiting for SSH" >&2
+      return 1
+    fi
+    sleep 5
+    ((waited += 5))
+  done
+}
+bootstrap_ssh() {
+  local attempt
+  for attempt in 1 2 3; do
+    press ctrl-alt-f3
+    sleep 8
+    press ret # settle a half-typed prompt from a previous attempt
+    sleep 2
+    type_text "$GUEST_USER"
+    capture_console "success-first-boot-03-console-username"
+    press ret
+    sleep 3
+    type_text "$GUEST_PASSWORD"
+    press ret
+    sleep 4
+    type_text "curl -fsS http://10.0.2.2:$HTTP_PORT/bootstrap -o /tmp/bs && bash /tmp/bs"
+    capture_console "success-first-boot-05-bootstrap-command"
+    press ret
+
+    if wait_for_ssh 120 "failure-first-boot-ssh-timeout-$attempt"; then
+      return 0
+    fi
+  done
+}
 ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance"
   log "Collecting artifacts into $RUN_DIR"
 ssh_guest "tar -cf - /tmp/omarchy-acceptance"
@@ -100,6 +135,11 @@ ssh_guest "tar -cf - /tmp/omarchy-acceptance"
             self.assertIn('ssh_guest -tt "OMARCHY_ACCEPTANCE_TEST_TIMEOUT=', adapted)
             self.assertIn('ssh_guest "tar ', adapted)
             self.assertEqual('start_vm "$RUN_DIR/run.qcow2"' in adapted, upgrade)
+            self.assertIn('log "SSH bootstrap attempt $attempt/3"', adapted)
+            self.assertIn('wait_for_screen "login:" 30', adapted)
+            self.assertIn('wait_for_screen "Password:" 20', adapted)
+            self.assertIn('if wait_for_ssh "$ssh_timeout"', adapted)
+            self.assertIn('... waiting for SSH (${waited}/${timeout}s)', adapted)
 
     def test_harness_adapter_supports_ubuntu_firmware_and_imagemagick(self):
         fixture = '''omarchy-pkg-add qemu-full edk2-ovmf socat imagemagick tesseract tesseract-data-eng
@@ -107,6 +147,41 @@ OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
 OVMF_VARS_TEMPLATE="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
   magick "$shot" out.png
   magick "$shot" gray.png
+wait_for_ssh() {
+  local timeout="$1" failure_name="${2:-failure-session-ssh-timeout}" waited=0
+  while ! ssh_guest true 2>/dev/null; do
+    if ((waited >= timeout)); then
+      capture_console "$failure_name"
+      echo "Timed out after ${timeout}s waiting for SSH" >&2
+      return 1
+    fi
+    sleep 5
+    ((waited += 5))
+  done
+}
+bootstrap_ssh() {
+  local attempt
+  for attempt in 1 2 3; do
+    press ctrl-alt-f3
+    sleep 8
+    press ret # settle a half-typed prompt from a previous attempt
+    sleep 2
+    type_text "$GUEST_USER"
+    capture_console "success-first-boot-03-console-username"
+    press ret
+    sleep 3
+    type_text "$GUEST_PASSWORD"
+    press ret
+    sleep 4
+    type_text "curl -fsS http://10.0.2.2:$HTTP_PORT/bootstrap -o /tmp/bs && bash /tmp/bs"
+    capture_console "success-first-boot-05-bootstrap-command"
+    press ret
+
+    if wait_for_ssh 120 "failure-first-boot-ssh-timeout-$attempt"; then
+      return 0
+    fi
+  done
+}
 ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance"
   log "Collecting artifacts into $RUN_DIR"
 '''

@@ -67,6 +67,62 @@ def adapt_harness(text, upgrade, ovmf_code=None, ovmf_vars=None, image_command="
     # Do not add a TTY to artifact tar transport.
     text = replace_once(text, 'ssh_guest "OMARCHY_ACCEPTANCE_TEST_TIMEOUT=',
                         'ssh_guest -tt "OMARCHY_ACCEPTANCE_TEST_TIMEOUT=')
+    # The graphical greeter can reclaim the active VT during first boot. The
+    # upstream harness types the console login blind, then waits two minutes
+    # before retrying. Wait for the real getty prompts and use short early SSH
+    # probes while retaining a longer final allowance for a genuinely slow VM.
+    text = replace_once(text, '''  local attempt
+  for attempt in 1 2 3; do
+    press ctrl-alt-f3
+    sleep 8
+    press ret # settle a half-typed prompt from a previous attempt
+    sleep 2
+    type_text "$GUEST_USER"
+    capture_console "success-first-boot-03-console-username"
+    press ret
+    sleep 3
+    type_text "$GUEST_PASSWORD"
+    press ret
+    sleep 4
+    type_text "curl -fsS http://10.0.2.2:$HTTP_PORT/bootstrap -o /tmp/bs && bash /tmp/bs"
+    capture_console "success-first-boot-05-bootstrap-command"
+    press ret
+
+    if wait_for_ssh 120 "failure-first-boot-ssh-timeout-$attempt"; then''', '''  local attempt ssh_timeout
+  for attempt in 1 2 3; do
+    log "SSH bootstrap attempt $attempt/3"
+    press ctrl-alt-f3
+    sleep 3
+    press ctrl-d # leave a prior shell/password prompt in a known getty state
+    if ! wait_for_screen "login:" 30; then
+      continue
+    fi
+    type_text "$GUEST_USER"
+    capture_console "success-first-boot-03-console-username"
+    press ret
+    if ! wait_for_screen "Password:" 20; then
+      continue
+    fi
+    type_text "$GUEST_PASSWORD"
+    press ret
+    sleep 3
+    type_text "curl -fsS http://10.0.2.2:$HTTP_PORT/bootstrap -o /tmp/bs && bash /tmp/bs"
+    capture_console "success-first-boot-05-bootstrap-command"
+    press ret
+
+    ssh_timeout=30
+    ((attempt == 3)) && ssh_timeout=120
+    if wait_for_ssh "$ssh_timeout" "failure-first-boot-ssh-timeout-$attempt"; then''')
+    text = replace_once(text, '''    sleep 5
+    ((waited += 5))
+  done
+}''', '''    if ((waited % 15 == 0)); then
+      echo "    ... waiting for SSH (${waited}/${timeout}s)"
+    fi
+    sleep 5
+    ((waited += 5))
+  done
+}''')
     if upgrade:
         anchor = '  log "Collecting artifacts into $RUN_DIR"'
         reboot = '''  if ((status == 0)); then
