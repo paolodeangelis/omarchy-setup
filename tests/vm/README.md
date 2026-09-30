@@ -10,12 +10,12 @@ The shared workflow provisions QEMU, OVMF, ImageMagick and Tesseract on
 `ubuntu-24.04`, verifies `/dev/kvm`, and gives the guest 5 GiB. It adapts only
 reviewed host-path differences in the pinned official harness. The VM workflow
 is manual/release-triggered and never runs for pull requests. Guest internet
-access is required for repositories, AUR and weather data.
+access is required for repositories and AUR.
 
 In Actions, manually run:
 
 - **Pinned Omarchy**: fresh baseline, utility bootstrap, apps, both themes,
-  repeatability, restore, deblob, doctor and upstream desktop checks.
+  repeatability, restore, deblob, doctor and focused desktop checks.
 - **Upgrade Omarchy**: same configured baseline disk, official updater, reboot,
   tests before any repair/reapply, then setup checks.
 - **Latest Omarchy**: fresh latest stable release with the same acceptance.
@@ -36,7 +36,11 @@ it is not an exactly-once release webhook. Failed runs can be rerun manually.
 Actions handles triggers, permissions, runners and artifacts. Small Python
 helpers resolve exact releases/checksums and adapt the pinned upstream harness;
 Bash runs setup inside the installed guest. The adapter syncs **tests only**, not
-upstream product code. Upgrade restarts the same disk rather than reinstalling.
+upstream product code. The official harness supplies installation and boot; this
+project does not rerun Omarchy's entire product suite. Focused acceptance checks
+the shell surfaces this setup can break, avoiding unrelated live-data assertions
+such as weather-provider text. Upgrade restarts the same disk rather than
+reinstalling.
 
 Artifacts include manifests, package lists, shell logs, screenshots, OCR and
 failures. Guest disks, SSH keys and firmware state are excluded. Screenshots and

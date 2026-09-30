@@ -294,5 +294,8 @@ Three manual VM workflows cover fresh pinned Omarchy, configured baseline
 upgraded to latest, and fresh latest. A release watcher dispatches candidate
 tests when a newer official release appears. They use the pinned official ISO
 harness, verified ISO checksums, and an ephemeral GitHub-hosted KVM runner.
+The official harness installs and boots Omarchy; repository acceptance then
+tests this utility and the deterministic desktop surfaces it can affect. It does
+not rerun Omarchy's complete product suite or require live weather content.
 They have not yet established a passing system-compatibility run. See
 [runner execution and coverage limits](tests/vm/README.md).

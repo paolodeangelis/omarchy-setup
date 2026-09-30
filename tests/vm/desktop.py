@@ -21,6 +21,22 @@ def validate_log(log):
         raise RuntimeError("shell runtime errors detected; inspect shell-runtime.log")
 
 
+def capture_panel(output, plugin, delay=2):
+    try:
+        run("omarchy-shell", "shell", "summon", plugin)
+        time.sleep(delay)
+        layers = run("hyprctl", "layers", "-j")
+        (output / f"{plugin}-layers.json").write_text(layers)
+        if "omarchy-keyboard-panel" not in layers:
+            raise RuntimeError(f"{plugin}: no mapped popup layer")
+        screenshot = output / f"{plugin}.png"
+        run("grim", str(screenshot))
+        return screenshot
+    finally:
+        run("omarchy-shell", "shell", "hide", plugin)
+        time.sleep(1)
+
+
 def main():
     if run("hostname").strip() != "omarchy-test":
         raise RuntimeError("only run in the disposable acceptance guest")
@@ -39,23 +55,34 @@ def main():
         "spaces_interactions": "unverified: hover, settings, persistence and multi-output need UI acceptance",
         "animation_smoothness": "unverified: requires recorded transitions and frame review",
     }, indent=2))
-    for plugin in ("jankeesvw.notification-center",):
-        try:
-            run("omarchy-shell", "shell", "summon", plugin)
-            time.sleep(3)
-            layers = run("hyprctl", "layers", "-j")
-            (output / f"{plugin}-layers.json").write_text(layers)
-            if "omarchy-keyboard-panel" not in layers:
-                raise RuntimeError(f"{plugin}: no mapped popup layer")
-            screenshot = output / f"{plugin}.png"
-            run("grim", str(screenshot))
-            text = run("tesseract", str(screenshot), "stdout")
-            (output / f"{plugin}-ocr.txt").write_text(text)
-            if plugin == "jankeesvw.notification-center" and "Notification archive integration probe" not in text:
-                raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")
-        finally:
-            run("omarchy-shell", "shell", "hide", plugin)
-            time.sleep(1)
+    # Exercise deterministic panel rendering without asserting remote weather,
+    # network, Bluetooth, audio, or battery data that a CI guest may not have.
+    for plugin in ("omarchy.weather", "omarchy.bluetooth", "omarchy.network", "omarchy.audio", "omarchy.monitor"):
+        capture_panel(output, plugin)
+
+    screenshot = capture_panel(output, "jankeesvw.notification-center", delay=3)
+    text = run("tesseract", str(screenshot), "stdout")
+    (output / "jankeesvw.notification-center-ocr.txt").write_text(text)
+    if "Notification archive integration probe" not in text:
+        raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")
+
+    try:
+        run("omarchy-menu", "summon", "system")
+        time.sleep(2)
+        menu = output / "system-menu.png"
+        run("grim", str(menu))
+        menu_text = run("tesseract", str(menu), "stdout")
+        (output / "system-menu-ocr.txt").write_text(menu_text)
+        if "Shutdown" not in menu_text:
+            raise RuntimeError("system menu content not visible; inspect screenshot/OCR")
+    finally:
+        run("omarchy-menu", "close")
+
+    osd = subprocess.Popen(("omarchy-osd", "-i", "volume-high", "-p", "50", "-d", "1200"))
+    time.sleep(0.35)
+    run("grim", str(output / "volume-osd.png"))
+    if osd.wait() != 0:
+        raise RuntimeError("OSD command failed")
     log = run("journalctl", "--user", "-t", "omarchy-shell", "--since", sys.argv[2], "--no-pager", "-o", "cat")
     (output / "shell-runtime.log").write_text(log)
     validate_log(log)

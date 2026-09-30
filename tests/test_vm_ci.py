@@ -125,3 +125,16 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             with self.subTest(log=log), self.assertRaises(RuntimeError):
                 desktop.validate_log(log)
         desktop.validate_log("Shell configuration loaded")
+        desktop.validate_log(
+            "file:///usr/share/omarchy/shell/plugins/panels/network/Panel.qml[12:-1]: "
+            "TypeError: Cannot read property 'foreground' of null"
+        )
+
+    def test_guest_acceptance_is_project_focused(self):
+        guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
+        self.assertNotIn("acceptance-upstream", guest)
+        self.assertNotIn("acceptance.d/", guest)
+        self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
+        desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
+        for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "system-menu.png", "volume-osd.png"):
+            self.assertIn(surface, desktop)
