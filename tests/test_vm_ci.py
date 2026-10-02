@@ -267,4 +267,5 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertNotIn("brew install", workflow)
         self.assertIn("63b948ca5cb94307fd5444ee6e73927a41ccdab4", workflow)
         self.assertIn("cmake --preset minimal-client", workflow)
+        self.assertIn("-DCHANNEL_RDPECAM_CLIENT=OFF", workflow)
         self.assertIn("xfreerdp3 /version", workflow)

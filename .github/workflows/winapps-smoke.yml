@@ -61,7 +61,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
             -DBUILD_TESTING=OFF -DWITH_SERVER=OFF -DWITH_SHADOW=OFF \
             -DWITH_PROXY=OFF -DWITH_CLIENT_SDL=OFF -DWITH_WEBVIEW=OFF \
-            -DWITH_SAMPLE=OFF
+            -DWITH_SAMPLE=OFF -DCHANNEL_RDPECAM_CLIENT=OFF
           cmake --build "${RUNNER_TEMP}/freerdp-build" --parallel 2
           sudo cmake --install "${RUNNER_TEMP}/freerdp-build"
           sudo ldconfig
