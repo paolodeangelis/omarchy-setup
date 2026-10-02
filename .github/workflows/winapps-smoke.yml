@@ -69,7 +69,12 @@ jobs:
       - name: Boot ephemeral Windows and open built-in RemoteApps
         env:
           WINAPPS_ARTIFACTS: ${{ runner.temp }}/winapps-artifacts
-        run: bash tests/winapps/smoke.sh
+        run: |
+          bash tests/winapps/smoke.sh
+          for evidence in result.txt notepad.png edge.png \
+              notepad-window-title.txt edge-window-title.txt; do
+            test -s "${WINAPPS_ARTIFACTS}/${evidence}"
+          done
       - name: Record evidence boundary
         if: always()
         env:

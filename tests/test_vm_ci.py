@@ -269,3 +269,16 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn("cmake --preset minimal-client", workflow)
         self.assertIn("-DCHANNEL_RDPECAM_CLIENT=OFF", workflow)
         self.assertIn("xfreerdp3 /version", workflow)
+        for evidence in (
+            "result.txt",
+            "notepad.png",
+            "edge.png",
+            "notepad-window-title.txt",
+            "edge-window-title.txt",
+        ):
+            self.assertIn(evidence, workflow)
+
+        smoke = (Path(__file__).parent / "winapps/smoke.sh").read_text()
+        self.assertIn("/auth-only", smoke)
+        self.assertNotIn("nc -z 127.0.0.1 3389", smoke)
+        self.assertEqual(smoke.count("trap cleanup EXIT"), 1)

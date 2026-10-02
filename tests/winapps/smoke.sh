@@ -11,11 +11,15 @@ ASKPASS=${RUNNER_TEMP}/winapps-askpass
 CONFIG=${HOME}/.config/winapps
 IMAGE=$(PYTHONPATH="$ROOT/src" python -c 'from omarchy_setup.modules.programs import WINDOWS_IMAGE; print(WINDOWS_IMAGE)')
 REVISION=$(PYTHONPATH="$ROOT/src" python -c 'from omarchy_setup.modules.programs import WINAPPS_REVISION; print(WINAPPS_REVISION)')
+XVFB_PID=
 mkdir -p "$ARTIFACTS" "$CONFIG"
 
 cleanup() {
   status=$?
   trap - EXIT
+  if [[ -n $XVFB_PID ]]; then
+    kill "$XVFB_PID" 2>/dev/null || true
+  fi
   podman logs WinApps >"$ARTIFACTS/windows-container.log" 2>&1 || true
   podman-compose --file "$CONFIG/compose.yaml" down --volumes >/dev/null 2>&1 || true
   rm -f "$ASKPASS" "$CONFIG/credentials.env"
@@ -48,29 +52,30 @@ podman image inspect "$IMAGE" --format '{{.Digest}}' \
   >"$ARTIFACTS/windows-image-digest.txt"
 podman-compose --file "$CONFIG/compose.yaml" up --detach
 
-echo "Waiting for Windows RDP readiness"
-ready=0
-for attempt in $(seq 1 90); do
-  if nc -z 127.0.0.1 3389; then
-    ready=1
-    break
-  fi
-  if (( attempt % 5 == 0 )); then
-    echo "  Windows installation in progress: $((attempt * 20))s"
-    podman logs --tail 8 WinApps 2>&1 | sed -E 's/(PASSWORD=)[^ ]+/\1[redacted]/g'
-  fi
-  sleep 20
-done
-[[ $ready == 1 ]] || { echo "RDP did not become ready"; exit 1; }
-
 export DISPLAY=:99
 Xvfb "$DISPLAY" -screen 0 1920x1080x24 >"$ARTIFACTS/xvfb.log" 2>&1 &
 XVFB_PID=$!
-trap 'kill "$XVFB_PID" 2>/dev/null || true; cleanup' EXIT
 sleep 2
 
 FREERDP=$(command -v xfreerdp3 || command -v xfreerdp)
 "$FREERDP" /version >"$ARTIFACTS/freerdp-version.txt" 2>&1
+
+echo "Waiting for authenticated Windows RDP readiness"
+ready=0
+for attempt in $(seq 1 36); do
+  if FREERDP_ASKPASS="$ASKPASS" timeout 30s "$FREERDP" \
+      /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore /auth-only \
+      >"$ARTIFACTS/rdp-readiness.log" 2>&1; then
+    ready=1
+    break
+  fi
+  echo "  Windows is not ready for authentication (attempt $attempt/36)"
+  if (( attempt % 3 == 0 )); then
+    podman logs --tail 8 WinApps 2>&1 | sed -E 's/(PASSWORD=)[^ ]+/\1[redacted]/g'
+  fi
+  sleep 20
+done
+[[ $ready == 1 ]] || { echo "Authenticated RDP did not become ready"; exit 1; }
 
 open_remoteapp() {
   name=$1
