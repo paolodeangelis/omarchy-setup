@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol, Sequence, TextIO
 
 from omarchy_setup.progress import ProgressDisplay
+from omarchy_setup.modules.programs.winapps import WinAppsInstaller, WinAppsPaths
 
 
 class ProgramError(RuntimeError):
@@ -38,6 +39,9 @@ MINIFORGE_ARTIFACTS = {
 class ProgramPaths:
     data_home: Path
     shell_rc: Path
+    config_home: Path | None = None
+    state_home: Path | None = None
+    bin_home: Path | None = None
 
     @classmethod
     def for_user(cls) -> "ProgramPaths":
@@ -46,6 +50,13 @@ class ProgramPaths:
                 os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
             ),
             shell_rc=Path.home() / ".bashrc",
+            config_home=Path(
+                os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+            ),
+            state_home=Path(
+                os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")
+            ),
+            bin_home=Path.home() / ".local" / "bin",
         )
 
     @property
@@ -65,6 +76,8 @@ class Program:
     desktop_file: str | None = None
     aliases: tuple[str, ...] = ()
     kind: str = "command"
+    include_in_all: bool = True
+    onboarding_required: bool = False
 
 
 PROGRAMS = (
@@ -76,6 +89,44 @@ PROGRAMS = (
         install_command=(),
         aliases=("miniforge",),
         kind="mamba",
+    ),
+    Program(
+        name="winapps",
+        label="WinApps",
+        description=(
+            "Prepare pinned rootless-Podman WinApps integration; Windows and "
+            "application onboarding remain interactive."
+        ),
+        packages=(
+            "podman",
+            "podman-compose",
+            "crun",
+            "freerdp",
+            "curl",
+            "dialog",
+            "git",
+            "iproute2",
+            "libnotify",
+            "openbsd-netcat",
+        ),
+        install_command=(
+            "omarchy",
+            "pkg",
+            "add",
+            "podman",
+            "podman-compose",
+            "crun",
+            "freerdp",
+            "curl",
+            "dialog",
+            "git",
+            "iproute2",
+            "libnotify",
+            "openbsd-netcat",
+        ),
+        kind="winapps",
+        include_in_all=False,
+        onboarding_required=True,
     ),
     Program(
         name="zen",
@@ -195,6 +246,8 @@ class OmarchyProgramBackend:
     def is_installed(self, program: Program, paths: ProgramPaths) -> bool:
         if program.kind == "mamba":
             return (paths.mamba_root / "bin" / "mamba").is_file()
+        if program.kind == "winapps":
+            return WinAppsInstaller(WinAppsPaths.from_program_paths(paths)).is_prepared()
         if program.packages:
             result = subprocess.run(
                 ("pacman", "-Q", "--", *program.packages),
@@ -235,6 +288,10 @@ class OmarchyProgramBackend:
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
         if program.kind == "mamba":
             self._install_mamba(paths, quiet=quiet)
+            return
+        if program.kind == "winapps":
+            self._run(program.install_command, capture=quiet)
+            WinAppsInstaller(WinAppsPaths.from_program_paths(paths)).prepare()
             return
         # Several supported Omarchy installers launch their application after
         # installing it. Suppress only that launch so onboarding remains owned
@@ -311,7 +368,7 @@ class OmarchyProgramBackend:
 
 def resolve_programs(selection: str) -> tuple[Program, ...]:
     if selection == "all":
-        return PROGRAMS
+        return tuple(program for program in PROGRAMS if program.include_in_all)
     for program in PROGRAMS:
         if selection == program.name or selection in program.aliases:
             return (program,)
@@ -323,8 +380,9 @@ def format_program_list() -> str:
     """Return the user-facing catalog for ``install ls``."""
     lines = ["Available installation protocols:"]
     for program in PROGRAMS:
-        lines.append(f"  {program.name:<12} {program.description}")
-    lines.append("  all          Install every missing protocol above.")
+        suffix = " (run separately)" if not program.include_in_all else ""
+        lines.append(f"  {program.name:<12} {program.description}{suffix}")
+    lines.append("  all          Install every unattended-safe protocol above.")
     return "\n".join(lines)
 
 
@@ -394,6 +452,7 @@ def run_install(
     stdin: TextIO,
     stdout: TextIO,
     progress: bool = True,
+    install_only: bool = False,
 ) -> int:
     programs = resolve_programs(selection)
     display = ProgressDisplay(
@@ -410,10 +469,12 @@ def run_install(
         for program in programs:
             state = "already installed" if installed[program.name] else "install"
             actions = [state]
-            if set_defaults and program.default_command is not None:
+            if set_defaults and not install_only and program.default_command is not None:
                 actions.append("set default")
-            if login and program.login_command is not None:
+            if login and not install_only and program.login_command is not None:
                 actions.append("open login")
+            if program.onboarding_required and not installed[program.name]:
+                actions.append("manual onboarding required")
             display.message(f"  {program.label}: {', '.join(actions)}")
 
     if dry_run:
@@ -422,7 +483,7 @@ def run_install(
             print("Dry run complete; no programs changed or opened.", file=stdout)
         return 0
 
-    has_actions = bool(missing) or login or set_defaults
+    has_actions = bool(missing) or (not install_only and (login or set_defaults))
     if has_actions and not assume_yes and not _confirm(stdin, stdout):
         if not quiet:
             print("Cancelled. No programs changed or opened.", file=stdout)
@@ -442,11 +503,11 @@ def run_install(
         else:
             display.stage(index + 2, f"{program.label} already installed; skipping")
 
-        if set_defaults and program.default_command is not None:
+        if set_defaults and not install_only and program.default_command is not None:
             backend.set_default(program)
             if not quiet:
                 display.message(f"      Set {program.label} as an Omarchy default.")
-        if login and program.login_command is not None:
+        if login and not install_only and program.login_command is not None:
             backend.launch_login(program)
             if not quiet:
                 display.message(f"      Opened {program.label} login/onboarding.")
@@ -454,4 +515,11 @@ def run_install(
     display.stage(total + 3, "Program setup verified")
     if not quiet:
         print("Program setup complete.", file=stdout)
+        if any(program.onboarding_required for program in missing):
+            print(
+                "WinApps integration is prepared. On a fresh setup, Windows "
+                "credentials, first boot, and licensed applications still require "
+                "local onboarding.",
+                file=stdout,
+            )
     return 0

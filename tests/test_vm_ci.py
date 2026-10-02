@@ -231,3 +231,31 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
+
+    def test_upgrade_rechecks_all_managed_surfaces_and_winapps_layer(self):
+        guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
+        post_upgrade = guest.split(
+            "elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then", 1
+        )[1]
+        for evidence in (
+            "packages-post-upgrade-before-repeat.txt",
+            "state-before-post-upgrade.json",
+            "restored-menu-post-upgrade.png",
+            "install winapps -y --install-only --dry-run",
+            "deblob -y --dry-run",
+            "checks after-upgrade-configured",
+            "unittest discover",
+        ):
+            self.assertIn(evidence, post_upgrade)
+
+        upgrade = (
+            Path(__file__).parents[1] / ".github/workflows/omarchy-upgrade.yml"
+        ).read_text()
+        self.assertIn("needs: test", upgrade)
+        self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", upgrade)
+
+        watcher = (
+            Path(__file__).parents[1]
+            / ".github/workflows/omarchy-release-watch.yml"
+        ).read_text()
+        self.assertIn("gh workflow run omarchy-upgrade.yml", watcher)

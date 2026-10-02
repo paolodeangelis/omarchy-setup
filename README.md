@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml)
 [![Pinned Omarchy VM](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml)
+[![WinApps smoke](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/winapps-smoke.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/winapps-smoke.yml)
 ![Pinned Omarchy target](https://img.shields.io/badge/Omarchy_pinned_target-4.0.4-6f42c1)
 ![Latest Omarchy target](https://img.shields.io/badge/Omarchy_latest_target-4.0.4-6f42c1)
 
@@ -135,7 +136,7 @@ omarchy-setup install dropbox --login
 ```
 
 Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
-`spotify`, `whatsapp`, and `telegram`. `mamba` installs a pinned,
+`spotify`, `whatsapp`, `telegram`, and WinApps. `mamba` installs a pinned,
 checksum-verified Miniforge release under
 `~/.local/share/omarchy-setup/miniforge3`, appends one marked integration block
 to `~/.bashrc`, and leaves the base environment inactive. It does not run
@@ -154,6 +155,28 @@ by the Omarchy prompt. `install all -y` includes mamba and skips every target
 already detected as installed. Login is always interactive and credentials
 remain with the application. At present only Zen has an applicable Omarchy
 default.
+
+WinApps is prepared separately because an unattended `all` run cannot safely
+invent Windows credentials or complete licensed application onboarding:
+
+```bash
+omarchy-setup install winapps -y --install-only
+```
+
+The command installs the Omarchy/Arch prerequisites, checks direct KVM access,
+uses the reviewed WinApps revision and pinned Windows-container image, and
+installs secret-free native templates under `~/.config/winapps`. Existing
+Compose, WinApps, OEM, and credential files are preserved. Copy
+`credentials.env.example` to the ignored local `credentials.env`, restrict it
+to mode `600`, then perform the visible Windows first boot and application
+onboarding. The reusable source checkout and pin record live under
+`~/.local/state/omarchy-setup/winapps`; credentials and the Windows guest never
+enter this repository.
+
+The dedicated `WinApps built-in application smoke` workflow boots an ephemeral
+Windows guest on a direct-KVM runner and verifies that Notepad and Microsoft
+Edge map as RemoteApp windows. It deliberately does not claim Office licensing,
+Dropbox collaboration, graphics quality, or physical multi-monitor support.
 
 ## Theme
 
@@ -294,6 +317,14 @@ Three manual VM workflows cover fresh pinned Omarchy, configured baseline
 upgraded to latest, and fresh latest. A release watcher dispatches candidate
 tests when a newer official release appears. They use the pinned official ISO
 harness, verified ISO checksums, and an ephemeral GitHub-hosted KVM runner.
+WinApps uses a separate direct-KVM workflow because the disposable Omarchy
+machine is already a VM and cannot reliably host another accelerated Windows
+guest. Every newly detected stable Omarchy release dispatches the configured
+upgrade workflow. That workflow first updates the already-configured baseline
+VM and repeats program, theme, restore, deblob, doctor/UI, idempotency, and test
+coverage; only after it passes does the same workflow run the direct-KVM
+Notepad/Edge smoke. This combined result does not claim that Windows was nested
+inside the upgraded Omarchy VM.
 The official harness installs and boots Omarchy; repository acceptance then
 tests this utility and the deterministic desktop surfaces it can affect. It does
 not rerun Omarchy's complete product suite or require live weather content.

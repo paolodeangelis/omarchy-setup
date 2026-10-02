@@ -26,6 +26,7 @@ from omarchy_setup.modules.programs import (
     ProgramPaths,
     format_program_list,
     run_install,
+    WinAppsError,
 )
 from omarchy_setup.modules.theme import (
     OmarchyThemeBackend,
@@ -101,6 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     install = commands.add_parser("install", help="install optional programs and services")
+    install.add_argument(
+        "--install-only",
+        action="store_true",
+        help="install programs but skip defaults and interactive onboarding",
+    )
     install.add_argument(
         "target",
         metavar="{ls,list,all,program}",
@@ -224,6 +230,7 @@ def main(
                 stdin=stdin,
                 stdout=stdout,
                 progress=not args.no_progress,
+                install_only=args.install_only,
             )
         if args.command == "theme":
             return run_theme(
@@ -236,7 +243,7 @@ def main(
                 stdout=stdout,
                 progress=not args.no_progress,
             )
-    except (DeblobError, InitError, ProgramError, ThemeError) as error:
+    except (DeblobError, InitError, ProgramError, ThemeError, WinAppsError) as error:
         print(f"Error: {error}", file=stderr)
         return 2
 

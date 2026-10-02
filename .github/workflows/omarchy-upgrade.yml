@@ -17,3 +17,8 @@ jobs:
     with:
       mode: upgrade
       candidate: ${{ inputs.candidate }}
+  winapps:
+    needs: test
+    uses: ./.github/workflows/winapps-smoke.yml
+    with:
+      candidate: ${{ inputs.candidate }}

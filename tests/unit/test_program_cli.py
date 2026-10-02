@@ -17,6 +17,13 @@ class ProgramCliTests(unittest.TestCase):
         self.assertTrue(args.login)
         self.assertTrue(args.set_defaults)
 
+    def test_install_only_is_available_for_noninteractive_preparation(self) -> None:
+        args = build_parser().parse_args(
+            ["install", "winapps", "-y", "--install-only"]
+        )
+
+        self.assertTrue(args.install_only)
+
     def test_spelling_compatibility_aliases_are_accepted(self) -> None:
         args = build_parser().parse_args(
             ["install", "zen", "--loggin", "--defoult"]
@@ -40,6 +47,8 @@ class ProgramCliTests(unittest.TestCase):
         listing = output.getvalue()
         self.assertIn("Available installation protocols:", listing)
         self.assertIn("mamba", listing)
+        self.assertIn("winapps", listing)
+        self.assertIn("run separately", listing)
         self.assertIn("Zen Browser", listing)
         self.assertIn("all", listing)
 

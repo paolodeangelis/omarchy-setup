@@ -81,6 +81,7 @@ if [[ $PHASE == initial ]]; then
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
   "$LAUNCHER" install all -y -d --no-progress
+  "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-before-repeat.txt"
   "$LAUNCHER" install all -y -d --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
@@ -122,8 +123,29 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
     sequence=$((sequence + 1))
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     checks "after-upgrade-$sequence-$style"
+    cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before-post-upgrade.json"
+    "$LAUNCHER" theme "bar-$style" -y --no-progress
+    cmp "$ARTIFACTS/state-before-post-upgrade.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
   done
+  "$LAUNCHER" theme restore -y --no-progress
+  session
+  [[ $OMARCHY_PATH == /usr/share/omarchy ]]
+  omarchy-shell shell summon omarchy.menu '{}'
+  sleep 1
+  grim "$ARTIFACTS/restored-menu-post-upgrade.png"
+  omarchy-shell shell hide omarchy.menu
+  "$LAUNCHER" theme bar-fixed -y --no-progress
+  session
   "$LAUNCHER" install all -y --no-progress
+  pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-before-repeat.txt"
+  "$LAUNCHER" install all -y --no-progress
+  pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"
+  cmp "$ARTIFACTS/packages-post-upgrade-before-repeat.txt" "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"
+  "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
+  "$LAUNCHER" deblob -y --dry-run --no-progress
+  "$LAUNCHER" deblob -y --no-progress
+  "$LAUNCHER" deblob -y --no-progress
+  checks after-upgrade-configured
   PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
 else
   echo "Invalid phase/mode $PHASE/$MODE"; exit 1

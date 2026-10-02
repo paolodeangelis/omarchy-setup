@@ -54,6 +54,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         login: bool = False,
         set_defaults: bool = False,
         dry_run: bool = False,
+        install_only: bool = False,
     ) -> tuple[int, str]:
         output = io.StringIO()
         result = run_install(
@@ -67,6 +68,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
             quiet=False,
             stdin=io.StringIO(""),
             stdout=output,
+            install_only=install_only,
         )
         return result, output.getvalue()
 
@@ -137,6 +139,27 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
 
         self.assertEqual(backend.installs, ["mamba"])
         self.assertEqual(backend.package_preparations, 0)
+
+    def test_install_only_suppresses_login_and_default_hooks(self) -> None:
+        backend = FakeBackend(installed={"zen"})
+
+        self.execute(
+            "zen",
+            backend,
+            login=True,
+            set_defaults=True,
+            install_only=True,
+        )
+
+        self.assertEqual(backend.defaults, [])
+        self.assertEqual(backend.logins, [])
+
+    def test_winapps_is_explicitly_excluded_from_unattended_all(self) -> None:
+        backend = FakeBackend()
+
+        self.execute("all", backend)
+
+        self.assertNotIn("winapps", backend.installs)
 
     def test_declined_plan_changes_nothing(self) -> None:
         backend = FakeBackend()

@@ -5,7 +5,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from omarchy_setup.cli import main
 from omarchy_setup.modules.init import InitError, InitPaths, run_init
 
 
@@ -105,6 +107,19 @@ class InitTests(unittest.TestCase):
         self.assertEqual(backend.environment_builds, 0)
         self.assertFalse(self.paths.state_root.exists())
         self.assertIn("Dry run complete", output)
+
+    def test_cli_init_does_not_forward_install_only_state(self) -> None:
+        output = io.StringIO()
+        with patch("omarchy_setup.cli.InitPaths.for_user", return_value=self.paths):
+            result = main(
+                ["init", "-y", "--dry-run", "--no-progress"],
+                backend=FakeBackend(),
+                stdin=io.StringIO(""),
+                stdout=output,
+            )
+
+        self.assertEqual(result, 0)
+        self.assertIn("Dry run complete", output.getvalue())
 
     def test_refuses_unrelated_launcher_before_changes(self) -> None:
         self.paths.bin_dir.mkdir(parents=True)

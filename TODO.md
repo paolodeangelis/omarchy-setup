@@ -23,10 +23,17 @@
 - [x] Add explicit login and Omarchy-default hooks
 - [ ] Implement `programs list`
 - [ ] Implement `programs status`
-- [ ] Implement `--install-only`
+- [x] Implement `--install-only`
 - [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
 - [x] Add Miniforge-backed `mamba` with an Omarchy-safe shell integration
-- [ ] Add WinApps
+- [x] Review upstream WinApps and record a manual-first install, acceptance, and preservation-safe removal plan in `programs/winapps/PLAN.md`
+- [x] Audit WinApps plan for Mac layout fidelity, Dropbox co-authoring, sandbox/host evidence, OEM assets, and installer source drift
+- [x] Replace the moving WinApps installer path with a pinned source/image preparation lifecycle and verify actual host prerequisites
+- [ ] Validate a real team-deck Mac/Windows round trip, sharing workflow, and three-working-day pilot
+- [ ] Finish guided WinApps evidence: exact Windows/Office versions, real team deck, physical multi-monitor, and backup/restore pilot
+- [ ] Finish WinApps lifecycle beyond pinned preparation: guided credentials/onboarding, status, application rescan, and verification reporting
+- [ ] Implement integration-only WinApps uninstall that preserves the guest disk and user data by default
+- [x] Add explicit WinApps preparation plus direct-KVM Notepad/Edge smoke gated after each configured Omarchy release-upgrade run (workflow execution still required)
 
 ## Configuration
 - [ ] Dotfile deployment
