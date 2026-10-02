@@ -259,3 +259,11 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             / ".github/workflows/omarchy-release-watch.yml"
         ).read_text()
         self.assertIn("gh workflow run omarchy-upgrade.yml", watcher)
+
+    def test_winapps_smoke_pins_freerdp_without_linuxbrew(self):
+        workflow = (
+            Path(__file__).parents[1] / ".github/workflows/winapps-smoke.yml"
+        ).read_text()
+        self.assertNotIn("brew install", workflow)
+        self.assertIn("63b948ca5cb94307fd5444ee6e73927a41ccdab4", workflow)
+        self.assertIn("xfreerdp3 /version", workflow)

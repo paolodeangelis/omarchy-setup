@@ -41,10 +41,33 @@ jobs:
             openssl netcat-openbsd git
           sudo chmod 0666 /dev/kvm /dev/net/tun
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Install FreeRDP 3
+      - name: Build pinned FreeRDP 3
         run: |
-          brew install freerdp
-          command -v xfreerdp3 || command -v xfreerdp
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential cmake ninja-build pkg-config zlib1g-dev libssl-dev \
+            libx11-dev libxext-dev libxinerama-dev libxcursor-dev libxkbfile-dev \
+            libxrandr-dev libxi-dev libxrender-dev libxfixes-dev libxdamage-dev \
+            libxtst-dev libxv-dev
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/FreeRDP/FreeRDP.git "${RUNNER_TEMP}/freerdp"
+          git -C "${RUNNER_TEMP}/freerdp" fetch --depth=1 origin \
+            63b948ca5cb94307fd5444ee6e73927a41ccdab4
+          git -C "${RUNNER_TEMP}/freerdp" checkout --detach \
+            63b948ca5cb94307fd5444ee6e73927a41ccdab4
+          test "$(git -C "${RUNNER_TEMP}/freerdp" rev-parse HEAD)" = \
+            63b948ca5cb94307fd5444ee6e73927a41ccdab4
+          cmake -GNinja -S "${RUNNER_TEMP}/freerdp" \
+            -B "${RUNNER_TEMP}/freerdp-build" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DBUILD_TESTING=OFF -DWITH_SERVER=OFF -DWITH_SHADOW=OFF \
+            -DWITH_PROXY=OFF -DWITH_CLIENT_SDL=OFF -DWITH_WEBVIEW=OFF \
+            -DWITH_SAMPLE=OFF -DWITH_CUPS=OFF -DWITH_PULSE=OFF \
+            -DWITH_ALSA=OFF -DWITH_FFMPEG=OFF -DWITH_JPEG=OFF \
+            -DWITH_WAYLAND=OFF
+          cmake --build "${RUNNER_TEMP}/freerdp-build" --parallel 2
+          sudo cmake --install "${RUNNER_TEMP}/freerdp-build"
+          sudo ldconfig
+          xfreerdp3 /version
       - name: Boot ephemeral Windows and open built-in RemoteApps
         env:
           WINAPPS_ARTIFACTS: ${{ runner.temp }}/winapps-artifacts
