@@ -56,14 +56,12 @@ jobs:
             63b948ca5cb94307fd5444ee6e73927a41ccdab4
           test "$(git -C "${RUNNER_TEMP}/freerdp" rev-parse HEAD)" = \
             63b948ca5cb94307fd5444ee6e73927a41ccdab4
-          cmake -GNinja -S "${RUNNER_TEMP}/freerdp" \
+          cmake --preset minimal-client -S "${RUNNER_TEMP}/freerdp" \
             -B "${RUNNER_TEMP}/freerdp-build" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
             -DBUILD_TESTING=OFF -DWITH_SERVER=OFF -DWITH_SHADOW=OFF \
             -DWITH_PROXY=OFF -DWITH_CLIENT_SDL=OFF -DWITH_WEBVIEW=OFF \
-            -DWITH_SAMPLE=OFF -DWITH_CUPS=OFF -DWITH_PULSE=OFF \
-            -DWITH_ALSA=OFF -DWITH_FFMPEG=OFF -DWITH_JPEG=OFF \
-            -DWITH_WAYLAND=OFF
+            -DWITH_SAMPLE=OFF
           cmake --build "${RUNNER_TEMP}/freerdp-build" --parallel 2
           sudo cmake --install "${RUNNER_TEMP}/freerdp-build"
           sudo ldconfig
