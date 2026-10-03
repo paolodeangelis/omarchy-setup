@@ -64,7 +64,7 @@ echo "Waiting for authenticated Windows RDP readiness"
 ready=0
 for attempt in $(seq 1 36); do
   if "$ASKPASS" | timeout 30s "$FREERDP" \
-      /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore /from-stdin /auth-only \
+      /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore /from-stdin:force /auth-only \
       >"$ARTIFACTS/rdp-readiness.log" 2>&1; then
     ready=1
     break
@@ -86,7 +86,7 @@ open_remoteapp() {
     echo "Opening $name RemoteApp (attempt $launch_attempt/6)"
     "$ASKPASS" | "$FREERDP" \
       /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore \
-      /from-stdin /size:1280x800 /app:program:"$executable",name:"$name" \
+      /from-stdin:force /size:1280x800 /app:program:"$executable",name:"$name" \
       >>"$log" 2>&1 &
     pid=$!
     for _ in $(seq 1 30); do
