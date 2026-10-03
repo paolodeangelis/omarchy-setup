@@ -7,11 +7,11 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 ARTIFACTS=${WINAPPS_ARTIFACTS:?}
 SOURCE=${RUNNER_TEMP:?}/winapps-source
-ASKPASS=${RUNNER_TEMP}/winapps-askpass
 CONFIG=${HOME}/.config/winapps
 IMAGE=$(PYTHONPATH="$ROOT/src" python -c 'from omarchy_setup.modules.programs import WINDOWS_IMAGE; print(WINDOWS_IMAGE)')
 REVISION=$(PYTHONPATH="$ROOT/src" python -c 'from omarchy_setup.modules.programs import WINAPPS_REVISION; print(WINAPPS_REVISION)')
 XVFB_PID=
+READY_FILE=${HOME}/.local/share/winapps/ci-rdp-ready
 mkdir -p "$ARTIFACTS" "$CONFIG"
 
 cleanup() {
@@ -22,7 +22,7 @@ cleanup() {
   fi
   podman logs WinApps >"$ARTIFACTS/windows-container.log" 2>&1 || true
   podman-compose --file "$CONFIG/compose.yaml" down --volumes >/dev/null 2>&1 || true
-  rm -f "$ASKPASS" "$CONFIG/credentials.env"
+  rm -f "$READY_FILE" "$CONFIG/credentials.env"
   exit "$status"
 }
 trap cleanup EXIT
@@ -37,11 +37,6 @@ cp -a "$SOURCE/oem" "$CONFIG/oem"
 
 WINAPPS_CI_PASSWORD=$(openssl rand -hex 24)
 export WINAPPS_CI_PASSWORD
-cat >"$ASKPASS" <<'EOF'
-#!/bin/sh
-printf '%s\n' "$WINAPPS_CI_PASSWORD"
-EOF
-chmod 0700 "$ASKPASS"
 printf 'USERNAME=winapps-ci\nPASSWORD=%s\n' "$WINAPPS_CI_PASSWORD" \
   >"$CONFIG/credentials.env"
 chmod 0600 "$CONFIG/credentials.env" "$CONFIG/winapps.conf" "$CONFIG/compose.yaml"
@@ -60,22 +55,43 @@ sleep 2
 FREERDP=$(command -v xfreerdp3 || command -v xfreerdp)
 "$FREERDP" /version >"$ARTIFACTS/freerdp-version.txt" 2>&1
 
-echo "Waiting for authenticated Windows RDP readiness"
+freerdp_args() {
+  printf '%s\n' \
+    '/v:127.0.0.1:3389' \
+    '/u:winapps-ci' \
+    "/p:${WINAPPS_CI_PASSWORD}" \
+    '/d:' \
+    '/cert:ignore' \
+    '/scale:100' \
+    '+auto-reconnect' \
+    "$@"
+}
+
+mkdir -p "$(dirname "$READY_FILE")"
+READY_WINDOWS='\\tsclient\home\.local\share\winapps\ci-rdp-ready'
+echo "Waiting for an authenticated RemoteApp command"
 ready=0
 for attempt in $(seq 1 36); do
-  if "$ASKPASS" | timeout 30s "$FREERDP" \
-      /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore /from-stdin:force /auth-only \
+  rm -f "$READY_FILE"
+  if timeout 30s "$FREERDP" /args-from:fd:3 \
+      3< <(freerdp_args '+home-drive' \
+        "/app:program:C:\Windows\System32\cmd.exe,hidef:on,cmd:/C type NUL > ${READY_WINDOWS} && tsdiscon") \
       >"$ARTIFACTS/rdp-readiness.log" 2>&1; then
+    :
+  fi
+  if [[ -f $READY_FILE ]]; then
     ready=1
     break
   fi
-  echo "  Windows is not ready for authentication (attempt $attempt/36)"
+  echo "  Windows RemoteApp command is not ready (attempt $attempt/36)"
   if (( attempt % 3 == 0 )); then
     podman logs --tail 8 WinApps 2>&1 | sed -E 's/(PASSWORD=)[^ ]+/\1[redacted]/g'
   fi
   sleep 20
 done
-[[ $ready == 1 ]] || { echo "Authenticated RDP did not become ready"; exit 1; }
+[[ $ready == 1 ]] || { echo "Authenticated RemoteApp did not become ready"; exit 1; }
+echo "RemoteApp command succeeded; waiting for its session to terminate"
+sleep 25
 
 open_remoteapp() {
   name=$1
@@ -84,9 +100,9 @@ open_remoteapp() {
   window=''
   for launch_attempt in $(seq 1 6); do
     echo "Opening $name RemoteApp (attempt $launch_attempt/6)"
-    "$ASKPASS" | "$FREERDP" \
-      /v:127.0.0.1:3389 /u:winapps-ci /cert:ignore \
-      /from-stdin:force /size:1280x800 /app:program:"$executable",name:"$name" \
+    "$FREERDP" /args-from:fd:3 \
+      3< <(freerdp_args "/wm-class:${name}" \
+        "/app:program:${executable},hidef:on,name:${name}") \
       >>"$log" 2>&1 &
     pid=$!
     for _ in $(seq 1 30); do
@@ -95,6 +111,7 @@ open_remoteapp() {
       kill -0 "$pid" 2>/dev/null || break
       sleep 2
     done
+    xwininfo -root -tree >"$ARTIFACTS/${name}-windows-${launch_attempt}.txt" 2>&1 || true
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     sleep 20

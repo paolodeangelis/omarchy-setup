@@ -279,8 +279,10 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             self.assertIn(evidence, workflow)
 
         smoke = (Path(__file__).parent / "winapps/smoke.sh").read_text()
-        self.assertIn("/auth-only", smoke)
-        self.assertGreaterEqual(smoke.count("/from-stdin:force"), 2)
+        self.assertGreaterEqual(smoke.count("/args-from:fd:3"), 2)
+        self.assertIn("ci-rdp-ready", smoke)
+        self.assertIn("tsdiscon", smoke)
+        self.assertIn("hidef:on", smoke)
         self.assertNotIn("FREERDP_ASKPASS=", smoke)
         self.assertNotIn("nc -z 127.0.0.1 3389", smoke)
         self.assertEqual(smoke.count("trap cleanup EXIT"), 1)
