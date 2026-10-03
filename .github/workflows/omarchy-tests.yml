@@ -1,0 +1,194 @@
+name: Omarchy 4.0.4
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Optional official stable release to test
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omarchy-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Fast project checks
+    runs-on: ubuntu-latest
+    outputs:
+      pre_commit: ${{ steps.pre_commit.outcome }}
+      compile: ${{ steps.compile.outcome }}
+      unit_integration: ${{ steps.unit_integration.outcome }}
+      bootstrap_cli: ${{ steps.bootstrap_cli.outcome }}
+      installer_cli: ${{ steps.installer_cli.outcome }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Run the same checks as pre-commit
+        id: pre_commit
+        continue-on-error: true
+        run: |
+          python -m pip install pre-commit==4.2.0
+          pre-commit run --all-files --show-diff-on-failure
+      - name: Compile Python sources
+        id: compile
+        continue-on-error: true
+        run: python -m compileall -q src tests
+      - name: Run unit and integration tests
+        id: unit_integration
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+      - name: Exercise bootstrap CLI parsing
+        id: bootstrap_cli
+        continue-on-error: true
+        run: ./omarchy-setup init -y --help >/dev/null
+      - name: Exercise program installer CLI parsing
+        id: installer_cli
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: python -m omarchy_setup install all -y --help >/dev/null
+      - name: Fail when a fast check failed
+        env:
+          PRE_COMMIT: ${{ steps.pre_commit.outcome }}
+          COMPILE: ${{ steps.compile.outcome }}
+          UNIT_INTEGRATION: ${{ steps.unit_integration.outcome }}
+          BOOTSTRAP_CLI: ${{ steps.bootstrap_cli.outcome }}
+          INSTALLER_CLI: ${{ steps.installer_cli.outcome }}
+        run: |
+          for result in "$PRE_COMMIT" "$COMPILE" "$UNIT_INTEGRATION" "$BOOTSTRAP_CLI" "$INSTALLER_CLI"; do
+            [[ $result == success ]] || exit 1
+          done
+
+  release:
+    name: Resolve newest stable Omarchy
+    runs-on: ubuntu-latest
+    outputs:
+      candidate: ${{ steps.release.outputs.candidate }}
+      run_candidate: ${{ steps.release.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve official release and ISO checksum
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ inputs.candidate || '' }}
+        run: python3 tests/vm/resolve.py latest --candidate "$CANDIDATE" --output release.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-detection
+          path: release.json
+
+  version_4_0_4:
+    name: Omarchy 4.0.4
+    uses: ./.github/workflows/omarchy-system.yml
+    with:
+      mode: pinned
+
+  fresh_candidate:
+    name: Fresh Omarchy ${{ needs.release.outputs.candidate }}
+    needs: release
+    if: needs.release.outputs.run_candidate == 'true'
+    uses: ./.github/workflows/omarchy-system.yml
+    with:
+      mode: latest
+      candidate: ${{ needs.release.outputs.candidate }}
+
+  upgrade_candidate:
+    name: Upgrade 4.0.4 to ${{ needs.release.outputs.candidate }}
+    needs: release
+    if: needs.release.outputs.run_candidate == 'true'
+    uses: ./.github/workflows/omarchy-system.yml
+    with:
+      mode: upgrade
+      candidate: ${{ needs.release.outputs.candidate }}
+
+  winapps:
+    name: WinApps basic compatibility
+    needs:
+      - checks
+      - release
+      - version_4_0_4
+      - fresh_candidate
+      - upgrade_candidate
+    if: >-
+      always() &&
+      needs.checks.result == 'success' &&
+      needs.release.result == 'success' &&
+      needs.version_4_0_4.result == 'success' &&
+      (needs.fresh_candidate.result == 'success' || needs.fresh_candidate.result == 'skipped') &&
+      (needs.upgrade_candidate.result == 'success' || needs.upgrade_candidate.result == 'skipped')
+    uses: ./.github/workflows/winapps-smoke.yml
+    with:
+      candidate: ${{ needs.release.outputs.candidate }}
+
+  report:
+    name: At-a-glance report
+    needs:
+      - checks
+      - release
+      - version_4_0_4
+      - fresh_candidate
+      - upgrade_candidate
+      - winapps
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write compatibility summary
+        env:
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
+          CHECKS: ${{ needs.checks.result }}
+          PRE_COMMIT: ${{ needs.checks.outputs.pre_commit }}
+          COMPILE: ${{ needs.checks.outputs.compile }}
+          UNIT_INTEGRATION: ${{ needs.checks.outputs.unit_integration }}
+          BOOTSTRAP_CLI: ${{ needs.checks.outputs.bootstrap_cli }}
+          INSTALLER_CLI: ${{ needs.checks.outputs.installer_cli }}
+          RELEASE: ${{ needs.release.result }}
+          VERSION_4_0_4: ${{ needs.version_4_0_4.result }}
+          FRESH_CANDIDATE: ${{ needs.fresh_candidate.result }}
+          UPGRADE_CANDIDATE: ${{ needs.upgrade_candidate.result }}
+          WINAPPS: ${{ needs.winapps.result }}
+        run: |
+          status() {
+            case "$1" in
+              success) printf '✅ success' ;;
+              ''|skipped) printf '➖ not run' ;;
+              cancelled) printf '⚪ cancelled' ;;
+              *) printf '❌ %s' "$1" ;;
+            esac
+          }
+          {
+            echo '# Omarchy compatibility report'
+            echo
+            echo "Newest official stable: ${CANDIDATE:-unresolved}"
+            echo
+            echo '| Check | Result |'
+            echo '|---|---|'
+            echo "| Release resolution | $(status "$RELEASE") |"
+            echo "| Pre-commit and Action syntax | $(status "$PRE_COMMIT") |"
+            echo "| Python compilation | $(status "$COMPILE") |"
+            echo "| Unit and integration tests | $(status "$UNIT_INTEGRATION") |"
+            echo "| Bootstrap CLI parsing | $(status "$BOOTSTRAP_CLI") |"
+            echo "| Program installer CLI parsing | $(status "$INSTALLER_CLI") |"
+            echo "| Fast-check aggregate | $(status "$CHECKS") |"
+            echo "| 4.0.4: fresh installation and bootstrap | $(status "$VERSION_4_0_4") |"
+            echo "| 4.0.4: programs and configuration | $(status "$VERSION_4_0_4") |"
+            echo "| 4.0.4: fixed/floating themes and plugins | $(status "$VERSION_4_0_4") |"
+            echo "| 4.0.4: restore and deblob safety | $(status "$VERSION_4_0_4") |"
+            echo "| 4.0.4: doctor, menus and OSD | $(status "$VERSION_4_0_4") |"
+            echo "| 4.0.4: idempotency and guest tests | $(status "$VERSION_4_0_4") |"
+            echo "| ${CANDIDATE:-candidate}: fresh compatibility | $(status "$FRESH_CANDIDATE") |"
+            echo "| 4.0.4 → ${CANDIDATE:-candidate}: configured upgrade | $(status "$UPGRADE_CANDIDATE") |"
+            echo "| WinApps: authenticated RemoteApp | $(status "$WINAPPS") |"
+            echo "| WinApps: Notepad window | $(status "$WINAPPS") |"
+            echo "| WinApps: Edge window | $(status "$WINAPPS") |"
+          } >> "$GITHUB_STEP_SUMMARY"

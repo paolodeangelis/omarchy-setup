@@ -248,17 +248,36 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         ):
             self.assertIn(evidence, post_upgrade)
 
-        upgrade = (
-            Path(__file__).parents[1] / ".github/workflows/omarchy-upgrade.yml"
+        workflow = (
+            Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
-        self.assertIn("needs: test", upgrade)
-        self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", upgrade)
+        self.assertIn("name: Omarchy 4.0.4", workflow)
+        self.assertIn("push:", workflow)
+        self.assertIn("mode: pinned", workflow)
+        self.assertIn("mode: latest", workflow)
+        self.assertIn("mode: upgrade", workflow)
+        self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", workflow)
+        self.assertIn("needs.upgrade_candidate.result", workflow)
+        self.assertIn("# Omarchy compatibility report", workflow)
+        self.assertIn("if: always()", workflow)
+        for report_item in (
+            "Pre-commit and Action syntax",
+            "Unit and integration tests",
+            "fixed/floating themes and plugins",
+            "doctor, menus and OSD",
+            "WinApps: Notepad window",
+            "WinApps: Edge window",
+        ):
+            self.assertIn(report_item, workflow)
 
         watcher = (
             Path(__file__).parents[1]
-            / ".github/workflows/omarchy-release-watch.yml"
+            / ".github/workflows/omarchy-release-check.yml"
         ).read_text()
-        self.assertIn("gh workflow run omarchy-upgrade.yml", watcher)
+        self.assertIn("cron: '19 */6 * * *'", watcher)
+        self.assertIn("gh workflow run omarchy-tests.yml", watcher)
+        self.assertIn("omarchy-release-dispatched-v2-", watcher)
+        self.assertIn("# Omarchy release report", watcher)
 
     def test_winapps_smoke_pins_freerdp_without_linuxbrew(self):
         workflow = (

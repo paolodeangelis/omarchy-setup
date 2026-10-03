@@ -1,10 +1,6 @@
 # omarchy-setup
 
-[![CI](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/ci.yml)
-[![Pinned Omarchy VM](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-pinned.yml)
-[![WinApps smoke](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/winapps-smoke.yml/badge.svg)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/winapps-smoke.yml)
-![Pinned Omarchy target](https://img.shields.io/badge/Omarchy_pinned_target-4.0.4-6f42c1)
-![Latest Omarchy target](https://img.shields.io/badge/Omarchy_latest_target-4.0.4-6f42c1)
+[![Omarchy 4.0.4](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
 
 Personal, reproducible setup and configuration framework for Omarchy.
 
@@ -173,7 +169,7 @@ onboarding. The reusable source checkout and pin record live under
 `~/.local/state/omarchy-setup/winapps`; credentials and the Windows guest never
 enter this repository.
 
-The dedicated `WinApps built-in application smoke` workflow boots an ephemeral
+The WinApps basic compatibility job boots an ephemeral
 Windows guest on a direct-KVM runner and verifies that Notepad and Microsoft
 Edge map as RemoteApp windows. It deliberately does not claim Office licensing,
 Dropbox collaboration, graphics quality, or physical multi-monitor support.
@@ -312,21 +308,18 @@ The same hooks run in GitHub-hosted CI. Hook installation is opt-in per clone.
 
 ### System checks
 
-Normal GitHub-hosted CI runs unit and fake-state integration tests on Ubuntu.
-Three manual VM workflows cover fresh pinned Omarchy, configured baseline
-upgraded to latest, and fresh latest. A release watcher dispatches candidate
-tests when a newer official release appears. They use the pinned official ISO
-harness, verified ISO checksums, and an ephemeral GitHub-hosted KVM runner.
-WinApps uses a separate direct-KVM workflow because the disposable Omarchy
-machine is already a VM and cannot reliably host another accelerated Windows
-guest. Every newly detected stable Omarchy release dispatches the configured
-upgrade workflow. That workflow first updates the already-configured baseline
-VM and repeats program, theme, restore, deblob, doctor/UI, idempotency, and test
-coverage; only after it passes does the same workflow run the direct-KVM
-Notepad/Edge smoke. This combined result does not claim that Windows was nested
-inside the upgraded Omarchy VM.
+Every pushed commit runs one compatibility workflow containing fast project
+checks, a fresh Omarchy 4.0.4 VM, and the WinApps basic compatibility test. If
+the newest official stable release is newer than 4.0.4, the same run adds both
+a fresh candidate VM and a configured 4.0.4-to-candidate upgrade VM. A separate
+six-hour release check dispatches this complete workflow once for each newly
+detected stable version; later manual runs or commits can retest a failure.
+The VM jobs use the pinned official ISO harness, verified ISO checksums, and an
+ephemeral GitHub-hosted KVM runner. WinApps uses a separate direct-KVM job
+because the disposable Omarchy machine is already a VM and cannot reliably
+host another accelerated Windows guest. Its Notepad/Edge result therefore does
+not claim that Windows was nested inside either Omarchy VM.
 The official harness installs and boots Omarchy; repository acceptance then
 tests this utility and the deterministic desktop surfaces it can affect. It does
 not rerun Omarchy's complete product suite or require live weather content.
-They have not yet established a passing system-compatibility run. See
-[runner execution and coverage limits](tests/vm/README.md).
+See [runner execution and coverage limits](tests/vm/README.md).

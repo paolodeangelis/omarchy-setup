@@ -1,4 +1,4 @@
-name: WinApps built-in application smoke
+name: Shared WinApps basic compatibility execution
 
 on:
   workflow_call:
@@ -7,19 +7,6 @@ on:
         description: Omarchy release whose upgrade run requested this companion smoke
         type: string
         default: ''
-  workflow_dispatch:
-    inputs:
-      candidate:
-        description: Optional Omarchy release associated with this smoke
-        type: string
-        default: ''
-  pull_request:
-    paths:
-      - '.github/workflows/winapps-smoke.yml'
-      - 'programs/winapps/**'
-      - 'src/omarchy_setup/modules/programs/**'
-      - 'tests/winapps/**'
-
 permissions:
   contents: read
 
