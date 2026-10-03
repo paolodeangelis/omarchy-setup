@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import re
+import time
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -13,12 +15,24 @@ def version(value):
     return tuple(map(int, value.removeprefix("v").split(".")))
 
 
-def fetch(url):
+def fetch(url, attempts=3):
     headers = {"User-Agent": "omarchy-setup-ci"}
     if url.startswith("https://api.github.com/") and os.environ.get("GH_TOKEN"):
         headers["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
-    with urlopen(Request(url, headers=headers), timeout=60) as response:
-        return response.read().decode()
+    for attempt in range(attempts):
+        try:
+            with urlopen(Request(url, headers=headers), timeout=60) as response:
+                return response.read().decode()
+        except HTTPError as error:
+            if error.code != 429 and error.code < 500:
+                raise
+            if attempt == attempts - 1:
+                raise
+        except (TimeoutError, URLError, ConnectionError):
+            if attempt == attempts - 1:
+                raise
+        time.sleep(2 ** attempt)
+    raise AssertionError("unreachable")
 
 
 def plan(config, mode, latest, baseline=""):

@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import json
 import os
 import subprocess
@@ -82,6 +82,16 @@ class VmCiTests(unittest.TestCase):
     def test_reject_unknown_mode(self):
         with self.assertRaises(ValueError):
             self.resolve.plan(self.config, "typo", "v4.0.5")
+
+    def test_release_fetch_retries_transient_timeout(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'content'
+        with patch.object(
+            self.resolve, "urlopen", side_effect=(TimeoutError("slow"), response)
+        ) as request, patch.object(self.resolve.time, "sleep") as pause:
+            self.assertEqual(self.resolve.fetch("https://example.test"), "content")
+        self.assertEqual(request.call_count, 2)
+        pause.assert_called_once_with(1)
 
     def test_cli_skip_does_not_fetch_iso(self):
         with tempfile.TemporaryDirectory() as directory:
