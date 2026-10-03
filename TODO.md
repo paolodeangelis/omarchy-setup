@@ -33,7 +33,7 @@
 - [ ] Finish guided WinApps evidence: exact Windows/Office versions, real team deck, physical multi-monitor, and backup/restore pilot
 - [ ] Finish WinApps lifecycle beyond pinned preparation: guided credentials/onboarding, status, application rescan, and verification reporting
 - [ ] Implement integration-only WinApps uninstall that preserves the guest disk and user data by default
-- [x] Add explicit WinApps preparation plus direct-KVM Notepad/Edge smoke gated after each configured Omarchy release-upgrade run (workflow execution still required)
+- [x] Add explicit WinApps preparation plus direct-KVM Notepad/Edge smoke gated after each configured Omarchy release-upgrade run; verified by workflow run `37084133207`
 
 ## Configuration
 - [ ] Dotfile deployment
