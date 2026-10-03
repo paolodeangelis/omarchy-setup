@@ -55,6 +55,10 @@ class WinAppsPaths:
     def active_source(self) -> Path:
         return self.bin_root / "winapps-src"
 
+    @property
+    def ghost_cleaner_source(self) -> Path:
+        return self.templates.parent / "bin" / "winapps-clean-ghost"
+
 
 class WinAppsInstaller:
     def __init__(self, paths: WinAppsPaths):
@@ -71,6 +75,7 @@ class WinAppsInstaller:
                 self.paths.config_root / "winapps.conf",
                 self.paths.config_root / "oem",
                 self.paths.bin_root / "winapps",
+                self.paths.bin_root / "winapps-clean-ghost",
             )
         )
 
@@ -79,6 +84,7 @@ class WinAppsInstaller:
         self._prepare_source()
         self._prepare_active_source()
         self._install_launcher()
+        self._install_ghost_cleaner()
         self._install_templates()
         self._install_oem()
         self._write_metadata()
@@ -181,6 +187,17 @@ class WinAppsInstaller:
             if launcher.resolve() != target.resolve():
                 raise WinAppsError(f"refusing to replace existing launcher {launcher}")
             return
+        launcher.symlink_to(target)
+
+    def _install_ghost_cleaner(self) -> None:
+        launcher = self.paths.bin_root / "winapps-clean-ghost"
+        target = self.paths.ghost_cleaner_source
+        if not target.is_file():
+            raise WinAppsError(f"WinApps ghost cleaner missing: {target}")
+        if launcher.exists() or launcher.is_symlink():
+            if launcher.is_symlink() and launcher.resolve() == target.resolve():
+                return
+            raise WinAppsError(f"refusing to replace existing launcher {launcher}")
         launcher.symlink_to(target)
 
     def _copy_template(self, name: str, destination: str | None = None) -> None:

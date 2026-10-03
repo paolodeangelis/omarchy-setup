@@ -69,7 +69,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
 - [ ] Validate Claude Spaces attention hooks; Codex 0.160.0 hook execution, active-shell routing, PID association, and visible waiting badge are verified
-- [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients so Spaces does not retain closed Office icons; reproduced as the upstream `RemoteApp Marker Window`, with rootless Podman also making `winapps killrdp` track the wrapper PID instead of `xfreerdp3`
+- [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients automatically; rootless Podman makes upstream `winapps killrdp` track the wrapper PID, while the project now installs a safe manual `winapps-clean-ghost` workaround that acts only on tracked marker-only sessions
 - [ ] Reconfirm in the pinned VM that Olio plugin-facade teardown errors are gone; exact 4.0.4 stock panel null-style warnings are classified separately and all other runtime errors still fail
 
 ## Deblob

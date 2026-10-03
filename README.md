@@ -174,6 +174,17 @@ Windows guest on a direct-KVM runner and verifies that Notepad and Microsoft
 Edge map as RemoteApp windows. It deliberately does not claim Office licensing,
 Dropbox collaboration, graphics quality, or physical multi-monitor support.
 
+If a closed RemoteApp leaves a ghost launcher icon, run:
+
+```bash
+winapps-clean-ghost
+```
+
+The helper closes only a tracked WinApps FreeRDP process whose remaining
+Hyprland windows are all `RemoteApp Marker Window`. It refuses to act when an
+application window is still present or window state cannot be verified. Use
+`--dry-run` to inspect the match without closing it.
+
 ## Theme
 
 Install and activate the repository-owned `olio-su-silicio` theme with its

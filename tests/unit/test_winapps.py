@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import unittest
+from importlib.machinery import SourceFileLoader
+from types import ModuleType
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,6 +53,10 @@ class WinAppsInstallerTests(unittest.TestCase):
 
             self.assertEqual((paths.config_root / "compose.yaml").read_text(), first)
             self.assertFalse((paths.config_root / "credentials.env").exists())
+            self.assertEqual(
+                (paths.bin_root / "winapps-clean-ghost").resolve(),
+                paths.ghost_cleaner_source.resolve(),
+            )
             self.assertEqual(
                 (paths.config_root / "winapps.conf").stat().st_mode & 0o777,
                 0o600,
@@ -109,6 +115,69 @@ class WinAppsInstallerTests(unittest.TestCase):
                 capture_output=True,
             )
             self.assertEqual(syntax.returncode, 0, syntax.stderr)
+
+    def test_ghost_cleaner_selects_only_tracked_marker_only_freerdp(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[2]
+            / "programs"
+            / "winapps"
+            / "bin"
+            / "winapps-clean-ghost"
+        )
+        module = ModuleType("winapps_clean_ghost")
+        SourceFileLoader("winapps_clean_ghost", str(script)).exec_module(module)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for pid, name, children in (
+                (100, "podman", "101 102"),
+                (101, "xfreerdp3", ""),
+                (102, "xfreerdp3", ""),
+                (200, "xfreerdp3", ""),
+            ):
+                process = root / str(pid)
+                (process / "task" / str(pid)).mkdir(parents=True)
+                (process / "comm").write_text(name + "\n")
+                (process / "task" / str(pid) / "children").write_text(children)
+                parent = {100: 1, 101: 100, 102: 100, 200: 1}[pid]
+                (process / "status").write_text(f"Name:\t{name}\nPPid:\t{parent}\n")
+
+            candidates = module.freerdp_candidates(root, {100})
+            self.assertEqual(candidates, {101, 102})
+            selected = module.marker_only_pids(
+                candidates,
+                [
+                    {"pid": 101, "title": "", "size": [13, 13]},
+                    {"pid": 102, "title": module.MARKER_TITLE, "size": [13, 13]},
+                    {"pid": 102, "title": "Microsoft PowerPoint", "size": [900, 700]},
+                    {"pid": 200, "title": module.MARKER_TITLE, "size": [13, 13]},
+                ],
+            )
+            self.assertEqual(selected, {101})
+
+    def test_ghost_cleaner_does_not_treat_arbitrary_empty_window_as_marker(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[2]
+            / "programs"
+            / "winapps"
+            / "bin"
+            / "winapps-clean-ghost"
+        )
+        module = ModuleType("winapps_clean_ghost")
+        SourceFileLoader("winapps_clean_ghost", str(script)).exec_module(module)
+
+        self.assertFalse(module.is_marker({"title": "", "size": [800, 600]}))
+        self.assertFalse(module.is_marker({"title": "", "size": [0, 0]}))
+
+    def test_ghost_cleaner_script_has_valid_python_syntax(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[2]
+            / "programs"
+            / "winapps"
+            / "bin"
+            / "winapps-clean-ghost"
+        )
+        compile(script.read_text(), str(script), "exec")
 
 
 if __name__ == "__main__":
