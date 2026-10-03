@@ -319,6 +319,9 @@ ephemeral GitHub-hosted KVM runner. WinApps uses a separate direct-KVM job
 because the disposable Omarchy machine is already a VM and cannot reliably
 host another accelerated Windows guest. Its Notepad/Edge result therefore does
 not claim that Windows was nested inside either Omarchy VM.
+The manual workflow also offers a reviewed 4.0.3 baseline drill. It leaves the
+real 4.0.4 workstation baseline unchanged while exercising fresh 4.0.3, fresh
+4.0.4, and the configured 4.0.3-to-4.0.4 upgrade path in one reported run.
 The official harness installs and boots Omarchy; repository acceptance then
 tests this utility and the deterministic desktop surfaces it can affect. It does
 not rerun Omarchy's complete product suite or require live weather content.

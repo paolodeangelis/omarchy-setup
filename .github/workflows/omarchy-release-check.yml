@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   detect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       candidate: ${{ steps.release.outputs.candidate }}
       action: ${{ steps.dispatch.outputs.action || steps.already.outputs.action || steps.current.outputs.action }}
@@ -25,7 +25,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tests/vm/resolve.py latest --output release.json
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v5
         if: steps.release.outputs.run == 'true'
         id: dispatched
         with:
@@ -42,7 +42,7 @@ jobs:
           gh workflow run omarchy-tests.yml --ref "$DEFAULT_BRANCH" -f candidate="$CANDIDATE"
           echo "$CANDIDATE" > .release-dispatched
           echo 'action=dispatched' >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v5
         if: steps.release.outputs.run == 'true' && steps.dispatched.outputs.cache-hit != 'true'
         with:
           path: .release-dispatched
@@ -60,7 +60,7 @@ jobs:
     name: At-a-glance report
     needs: detect
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Write release-check summary
         env:

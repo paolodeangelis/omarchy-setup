@@ -86,6 +86,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Add non-mutating pre-commit checks and matching CI gate, including Actions lint and fast fixture tests
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
 - [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a six-hour release detector
+- [ ] Validate the reviewed Omarchy 4.0.3 -> 4.0.4 drill (fresh 4.0.3, fresh 4.0.4, and configured upgrade) in GitHub Actions
 - [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
 - [ ] Run fresh latest-stable Omarchy VM workflow when newer than baseline; currently latest equals 4.0.4

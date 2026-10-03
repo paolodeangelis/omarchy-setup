@@ -23,7 +23,11 @@ class VmCiTests(unittest.TestCase):
     def setUp(self):
         self.resolve = module("resolve")
         self.host = module("host")
-        self.config = {"baseline": "4.0.4", "harness_commit": "reviewed"}
+        self.config = {
+            "baseline": "4.0.4",
+            "harness_commit": "reviewed",
+            "upgrade_drills": {"4.0.3": {"iso_sha256": "reviewed"}},
+        }
 
     def test_pinned_does_not_follow_latest(self):
         plan = self.resolve.plan(self.config, "pinned", "v9.0.0")
@@ -40,6 +44,18 @@ class VmCiTests(unittest.TestCase):
             plan = self.resolve.plan(self.config, mode, "v4.0.10")
             self.assertTrue(plan["run"])
             self.assertEqual(plan["install_version"], expected)
+
+    def test_reviewed_upgrade_drill_uses_older_baseline(self):
+        upgrade = self.resolve.plan(self.config, "upgrade", "v4.0.4", "4.0.3")
+        fresh = self.resolve.plan(self.config, "latest", "v4.0.4", "4.0.3")
+        self.assertEqual(upgrade["install_version"], "4.0.3")
+        self.assertEqual(fresh["install_version"], "4.0.4")
+        self.assertTrue(upgrade["run"])
+        self.assertTrue(fresh["run"])
+
+    def test_upgrade_drill_rejects_unreviewed_baseline(self):
+        with self.assertRaisesRegex(ValueError, "unreviewed"):
+            self.resolve.plan(self.config, "upgrade", "v4.0.4", "4.0.2")
 
     def test_reject_unstable_and_shell_input(self):
         for value in ("4.0.4-1", "4.1.0-rc1", "latest", "4.0.4;true", ""):
@@ -252,12 +268,14 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
         self.assertIn("name: Omarchy 4.0.4", workflow)
+        self.assertIn("upgrade_from:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("mode: pinned", workflow)
         self.assertIn("mode: latest", workflow)
         self.assertIn("mode: upgrade", workflow)
         self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", workflow)
         self.assertIn("needs.upgrade_candidate.result", workflow)
+        self.assertIn("Tested path:", workflow)
         self.assertIn("# Omarchy compatibility report", workflow)
         self.assertIn("if: always()", workflow)
         for report_item in (
@@ -269,6 +287,19 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "WinApps: Edge window",
         ):
             self.assertIn(report_item, workflow)
+
+        workflows = "\n".join(
+            path.read_text()
+            for path in (Path(__file__).parents[1] / ".github/workflows").glob("*.yml")
+        )
+        for legacy in (
+            "ubuntu-latest",
+            "actions/upload-artifact@v4",
+            "actions/download-artifact@v4",
+            "actions/cache/restore@v4",
+            "actions/cache/save@v4",
+        ):
+            self.assertNotIn(legacy, workflows)
 
         watcher = (
             Path(__file__).parents[1]

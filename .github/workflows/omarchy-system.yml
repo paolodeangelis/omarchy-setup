@@ -8,11 +8,14 @@ on:
       candidate:
         type: string
         default: ''
+      baseline:
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       run: ${{ steps.release.outputs.run }}
       candidate: ${{ steps.release.outputs.candidate }}
@@ -24,8 +27,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ inputs.mode }}
           CANDIDATE: ${{ inputs.candidate }}
-        run: python3 tests/vm/resolve.py "$MODE" --candidate "$CANDIDATE" --output release.json
-      - uses: actions/upload-artifact@v4
+          BASELINE: ${{ inputs.baseline }}
+        run: python3 tests/vm/resolve.py "$MODE" --candidate "$CANDIDATE" --baseline "$BASELINE" --output release.json
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ inputs.mode }}
           path: release.json
@@ -50,7 +54,7 @@ jobs:
             tesseract-ocr tesseract-ocr-eng openssh-client
           test -e /dev/kvm
           sudo chmod 0666 /dev/kvm
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: release-${{ inputs.mode }}
           path: vm-input
@@ -58,7 +62,7 @@ jobs:
         run: python3 tests/vm/host.py vm-input/release.json
       - name: Upload selected diagnostics (never guest disks or SSH keys)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omarchy-${{ inputs.mode }}-${{ needs.resolve.outputs.candidate }}-${{ github.run_attempt }}
           path: vm-artifacts/

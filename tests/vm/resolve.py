@@ -21,11 +21,13 @@ def fetch(url):
         return response.read().decode()
 
 
-def plan(config, mode, latest):
+def plan(config, mode, latest, baseline=""):
     if mode not in {"pinned", "upgrade", "latest"}:
         raise ValueError(f"unknown VM mode: {mode}")
-    pinned = config["baseline"]
+    pinned = baseline or config["baseline"]
     version(pinned)
+    if pinned != config["baseline"] and pinned not in config.get("upgrade_drills", {}):
+        raise ValueError(f"unreviewed upgrade-drill baseline: {pinned}")
     candidate = pinned if mode == "pinned" else latest.removeprefix("v")
     version(candidate)
     return {
@@ -40,6 +42,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("pinned", "upgrade", "latest"))
     parser.add_argument("--candidate", default="")
+    parser.add_argument("--baseline", default="")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     config = json.loads(Path(__file__).with_name("releases.json").read_text())
@@ -47,7 +50,7 @@ def main():
     latest = release["tag_name"]
     if args.candidate and version(args.candidate) != version(latest):
         raise ValueError("requested candidate is no longer the latest release; rerun discovery")
-    result = plan(config, args.mode, latest)
+    result = plan(config, args.mode, latest, args.baseline)
     if result["run"]:
         name = f'omarchy-{result["install_version"]}.iso'
         url = f"https://iso.omarchy.org/{name}"
@@ -57,7 +60,12 @@ def main():
         checksum = parts[0].lower()
         if not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
             raise ValueError("invalid official ISO checksum")
-        if result["install_version"] == config["baseline"] and checksum != config["baseline_iso_sha256"]:
+        expected_checksum = None
+        if result["install_version"] == config["baseline"]:
+            expected_checksum = config["baseline_iso_sha256"]
+        elif result["install_version"] in config.get("upgrade_drills", {}):
+            expected_checksum = config["upgrade_drills"][result["install_version"]]["iso_sha256"]
+        if expected_checksum and checksum != expected_checksum:
             raise ValueError("official baseline checksum differs from reviewed checksum")
         tag = "v" + result["install_version"]
         ref = json.loads(fetch(f"https://api.github.com/repos/omacom/omarchy/commits/{tag}"))
