@@ -42,6 +42,7 @@ printf 'USERNAME=winapps-ci\nPASSWORD=%s\n' "$WINAPPS_CI_PASSWORD" \
 chmod 0600 "$CONFIG/credentials.env" "$CONFIG/winapps.conf" "$CONFIG/compose.yaml"
 
 export WINAPPS_RAM_SIZE=4G WINAPPS_CPU_CORES=2 WINAPPS_DISK_SIZE=64G
+export WINAPPS_AUTOLOGIN=N
 podman pull "$IMAGE"
 podman image inspect "$IMAGE" --format '{{.Digest}}' \
   >"$ARTIFACTS/windows-image-digest.txt"
@@ -96,6 +97,7 @@ sleep 25
 open_remoteapp() {
   name=$1
   executable=$2
+  expected_title=$3
   log="$ARTIFACTS/${name}.log"
   window=''
   for launch_attempt in $(seq 1 6); do
@@ -106,7 +108,13 @@ open_remoteapp() {
       >>"$log" 2>&1 &
     pid=$!
     for _ in $(seq 1 30); do
-      window=$(xdotool search --onlyvisible --pid "$pid" 2>/dev/null | head -1 || true)
+      while read -r candidate; do
+        title=$(xdotool getwindowname "$candidate" 2>/dev/null || true)
+        if [[ $title =~ $expected_title ]]; then
+          window=$candidate
+          break
+        fi
+      done < <(xdotool search --onlyvisible --pid "$pid" 2>/dev/null || true)
       [[ -n $window ]] && break 2
       kill -0 "$pid" 2>/dev/null || break
       sleep 2
@@ -123,8 +131,13 @@ open_remoteapp() {
   wait "$pid" 2>/dev/null || true
 }
 
-open_remoteapp notepad 'C:\Windows\System32\notepad.exe'
-open_remoteapp edge 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+open_remoteapp notepad 'C:\Windows\System32\notepad.exe' '[Nn]otepad'
+open_remoteapp edge 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' '([Ee]dge|Microsoft Edge)'
+
+if cmp -s "$ARTIFACTS/notepad.png" "$ARTIFACTS/edge.png"; then
+  echo 'Notepad and Edge evidence images are unexpectedly identical'
+  exit 1
+fi
 
 printf '%s\n' \
   'PASS: built-in Notepad and Edge mapped as RemoteApp windows.' \
