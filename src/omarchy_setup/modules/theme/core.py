@@ -199,6 +199,14 @@ class ThemePaths:
         return self.home / ".config" / "omarchy" / "shell.json"
 
     @property
+    def codex_hooks(self) -> Path:
+        return self.home / ".codex" / "hooks.json"
+
+    @property
+    def claude_settings(self) -> Path:
+        return self.home / ".claude" / "settings.json"
+
+    @property
     def current_theme_name(self) -> Path:
         return self.home / ".local" / "state" / "omarchy" / "current" / "theme.name"
 
@@ -270,6 +278,20 @@ def _run(command: tuple[str, ...], *, environment: dict[str, str] | None = None)
     return result.stdout.strip()
 
 
+def _run_plugin_command(
+    command: tuple[str, ...], *, environment: dict[str, str], attempts: int = 4
+) -> str:
+    """Retry only transient shell-startup failures from Omarchy plugin IPC."""
+    for attempt in range(attempts):
+        try:
+            return _run(command, environment=environment)
+        except ThemeError as error:
+            if "omarchy-shell is not responding" not in str(error) or attempt == attempts - 1:
+                raise
+            time.sleep(1.5 * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
 class OmarchyThemeBackend:
     def build_blobs(self, paths: ThemePaths, destination: Path) -> None:
         if not paths.uv.is_file():
@@ -339,12 +361,23 @@ class OmarchyThemeBackend:
         for plugin_id, url, placement in companions:
             manifest = plugins_root / plugin_id / "manifest.json"
             if not manifest.is_file():
-                _run(("omarchy", "plugin", "add", url, "--enable", "--yes"), environment=environment)
-            _run(("omarchy", "plugin", "enable", plugin_id, *placement), environment=environment)
+                _run_plugin_command(
+                    ("omarchy", "plugin", "add", url, "--enable", "--yes"),
+                    environment=environment,
+                )
+            _run_plugin_command(
+                ("omarchy", "plugin", "enable", plugin_id, *placement),
+                environment=environment,
+            )
+
+        _ensure_spaces_agent_hooks(paths)
 
         # Do this only after Spaces is installed and enabled. If any earlier
         # step fails, Omarchy's built-in workspace switcher remains available.
-        _run(("omarchy", "plugin", "disable", "omarchy.workspaces"), environment=environment)
+        _run_plugin_command(
+            ("omarchy", "plugin", "disable", "omarchy.workspaces"),
+            environment=environment,
+        )
 
     def set_theme(self, name: str, *, preserve_background: bool = False) -> None:
         environment = os.environ.copy()
@@ -590,6 +623,94 @@ def _write_atomic(path: Path, content: str) -> None:
     temporary = path.with_name(path.name + ".next")
     temporary.write_text(content)
     os.replace(temporary, path)
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ThemeError(f"invalid {label} configuration: {path}") from error
+    if not isinstance(value, dict):
+        raise ThemeError(f"{label} configuration must be an object: {path}")
+    return value
+
+
+def _append_command_hook(
+    config: dict[str, object], event: str, command: str, *, timeout: int = 3
+) -> None:
+    hooks = config.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ThemeError("agent hooks configuration must be an object")
+    groups = hooks.setdefault(event, [])
+    if not isinstance(groups, list):
+        raise ThemeError(f"agent hook event {event} must be a list")
+
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        handlers = group.get("hooks", [])
+        if isinstance(handlers, list) and any(
+            isinstance(handler, dict)
+            and handler.get("type") == "command"
+            and handler.get("command") == command
+            for handler in handlers
+        ):
+            return
+
+    groups.append(
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": command,
+                    "async": True,
+                    "timeout": timeout,
+                }
+            ]
+        }
+    )
+
+
+def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
+    reporter = (
+        paths.home
+        / ".config"
+        / "omarchy"
+        / "plugins"
+        / SPACES_ID
+        / "hooks"
+        / "claude-hook"
+    )
+    if not reporter.is_file():
+        raise ThemeError(f"Spaces agent reporter is missing: {reporter}")
+
+    base = shlex.quote(str(reporter))
+    codex = _read_json_object(paths.codex_hooks, "Codex hooks")
+    for event, state in (
+        ("UserPromptSubmit", "working"),
+        ("PostToolUse", "working"),
+        ("PermissionRequest", "waiting"),
+        # Codex has no general Notification hook. A stopped turn needs the
+        # user's attention, whether it ended with a question or an answer.
+        ("Stop", "waiting"),
+        ("SessionEnd", "end"),
+    ):
+        _append_command_hook(codex, event, f"{base} {state}")
+
+    claude = _read_json_object(paths.claude_settings, "Claude")
+    for event, state in (
+        ("UserPromptSubmit", "working"),
+        ("PostToolUse", "working"),
+        ("Notification", "waiting"),
+        ("Stop", "done"),
+        ("SessionEnd", "end"),
+    ):
+        _append_command_hook(claude, event, f"{base} {state}")
+
+    _write_atomic(paths.codex_hooks, json.dumps(codex, indent=2, ensure_ascii=False) + "\n")
+    _write_atomic(paths.claude_settings, json.dumps(claude, indent=2, ensure_ascii=False) + "\n")
 
 
 def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> None:

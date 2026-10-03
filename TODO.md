@@ -68,6 +68,8 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
+- [ ] Validate the installed Codex and Claude Spaces attention hooks after Codex `/hooks` trust review and a fresh agent session
+- [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients so Spaces does not retain closed Office icons
 - [ ] Reconfirm in the pinned VM that Olio plugin-facade teardown errors are gone; exact 4.0.4 stock panel null-style warnings are classified separately and all other runtime errors still fail
 
 ## Deblob
@@ -87,6 +89,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
 - [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a six-hour release detector
 - [ ] Validate the reviewed Omarchy 4.0.3 -> 4.0.4 drill (fresh 4.0.3, fresh 4.0.4, and configured upgrade) in GitHub Actions
+- [ ] Re-run the reviewed drill after bounded retries for transient `omarchy-shell is not responding` plugin IPC startup failures
 - [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
 - [ ] Run fresh latest-stable Omarchy VM workflow when newer than baseline; currently latest equals 4.0.4

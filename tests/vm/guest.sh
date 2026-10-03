@@ -64,6 +64,18 @@ checks() {
   "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage" "$STARTED"
   [[ -z $(hyprctl configerrors) ]]
 }
+agent_hooks_configured() {
+  local reporter="$HOME/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook"
+  [[ -x $reporter ]]
+  jq -e --arg command "$reporter waiting" '
+    [.hooks.PermissionRequest[].hooks[] | select(.type == "command") | .command]
+    | index($command) != null
+  ' "$HOME/.codex/hooks.json" >/dev/null
+  jq -e --arg command "$reporter waiting" '
+    [.hooks.Notification[].hooks[] | select(.type == "command") | .command]
+    | index($command) != null
+  ' "$HOME/.claude/settings.json" >/dev/null
+}
 if [[ $PHASE == initial ]]; then
   check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
   session
@@ -90,6 +102,7 @@ if [[ $PHASE == initial ]]; then
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
     "$LAUNCHER" theme "bar-$style" -y --no-progress
+    agent_hooks_configured
     checks "$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
@@ -122,6 +135,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
     "$LAUNCHER" theme "bar-$style" -y --no-progress
+    agent_hooks_configured
     checks "after-upgrade-$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before-post-upgrade.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress

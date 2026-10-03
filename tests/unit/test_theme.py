@@ -21,6 +21,8 @@ from omarchy_setup.modules.theme.core import (
     theme_status,
     _validate_theme_toml,
     _resolve_palette_references,
+    _ensure_spaces_agent_hooks,
+    _run_plugin_command,
 )
 
 
@@ -319,7 +321,9 @@ class ThemeTests(unittest.TestCase):
             commands.append(command)
             return ""
 
-        with patch("omarchy_setup.modules.theme.core._run", side_effect=record):
+        with patch("omarchy_setup.modules.theme.core._run", side_effect=record), patch(
+            "omarchy_setup.modules.theme.core._ensure_spaces_agent_hooks"
+        ):
             OmarchyThemeBackend().ensure_companion_plugins(self.paths)
 
         spaces_add = next(i for i, command in enumerate(commands) if command[:3] == ("omarchy", "plugin", "add"))
@@ -349,6 +353,77 @@ class ThemeTests(unittest.TestCase):
                 OmarchyThemeBackend().ensure_companion_plugins(self.paths)
 
         self.assertNotIn(("omarchy", "plugin", "disable", "omarchy.workspaces"), commands)
+
+    def test_spaces_agent_hooks_are_merged_and_idempotent(self) -> None:
+        reporter = (
+            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
+            / "hooks" / "claude-hook"
+        )
+        reporter.parent.mkdir(parents=True, exist_ok=True)
+        reporter.write_text("#!/bin/sh\n")
+        self.paths.codex_hooks.parent.mkdir(parents=True)
+        self.paths.codex_hooks.write_text(
+            '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"keep"}]}]}}\n'
+        )
+
+        _ensure_spaces_agent_hooks(self.paths)
+        _ensure_spaces_agent_hooks(self.paths)
+
+        codex = __import__("json").loads(self.paths.codex_hooks.read_text())
+        self.assertEqual(codex["hooks"]["SessionStart"][0]["hooks"][0]["command"], "keep")
+        self.assertEqual(len(codex["hooks"]["PermissionRequest"]), 1)
+        self.assertTrue(
+            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"].endswith(
+                "claude-hook waiting"
+            )
+        )
+        self.assertTrue(
+            codex["hooks"]["Stop"][0]["hooks"][0]["command"].endswith(
+                "claude-hook waiting"
+            )
+        )
+        claude = __import__("json").loads(self.paths.claude_settings.read_text())
+        self.assertTrue(
+            claude["hooks"]["Notification"][0]["hooks"][0]["command"].endswith(
+                "claude-hook waiting"
+            )
+        )
+
+    def test_spaces_agent_hooks_preserve_invalid_user_configuration(self) -> None:
+        reporter = (
+            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
+            / "hooks" / "claude-hook"
+        )
+        reporter.parent.mkdir(parents=True, exist_ok=True)
+        reporter.write_text("#!/bin/sh\n")
+        self.paths.codex_hooks.parent.mkdir(parents=True)
+        self.paths.codex_hooks.write_text("not-json\n")
+
+        with self.assertRaisesRegex(ThemeError, "invalid Codex hooks configuration"):
+            _ensure_spaces_agent_hooks(self.paths)
+
+        self.assertEqual(self.paths.codex_hooks.read_text(), "not-json\n")
+        self.assertFalse(self.paths.claude_settings.exists())
+
+    def test_plugin_command_retries_transient_shell_startup(self) -> None:
+        calls = 0
+
+        def flaky(_command: tuple[str, ...], **_kwargs: object) -> str:
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise ThemeError("omarchy plugin add: omarchy-shell is not responding")
+            return "ok"
+
+        with patch("omarchy_setup.modules.theme.core._run", side_effect=flaky), patch(
+            "omarchy_setup.modules.theme.core.time.sleep"
+        ) as pause:
+            self.assertEqual(
+                _run_plugin_command(("omarchy", "plugin", "add"), environment={}),
+                "ok",
+            )
+        self.assertEqual(calls, 3)
+        self.assertEqual(pause.call_count, 2)
 
     def test_failed_activation_restores_existing_user_files(self) -> None:
         self.paths.user_theme.mkdir(parents=True)
