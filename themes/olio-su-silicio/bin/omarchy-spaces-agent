@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Report coding-agent state to whichever Omarchy shell is active now. Agent
+# sessions may retain an older OMARCHY_PATH after the user switches shells.
+active_path=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^OMARCHY_PATH=//p' | tail -n1)
+if [[ -n $active_path && -f $active_path/shell/shell.qml ]]; then
+  export OMARCHY_PATH=$active_path
+fi
+
+exec "$@"

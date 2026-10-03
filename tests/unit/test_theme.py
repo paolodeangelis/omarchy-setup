@@ -377,6 +377,12 @@ class ThemeTests(unittest.TestCase):
                 "claude-hook waiting"
             )
         )
+        self.assertIn(
+            str(self.paths.spaces_agent_command),
+            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"],
+        )
+        self.assertTrue(self.paths.spaces_agent_command.is_file())
+        self.assertTrue(self.paths.spaces_agent_command.stat().st_mode & 0o100)
         self.assertTrue(
             codex["hooks"]["Stop"][0]["hooks"][0]["command"].endswith(
                 "claude-hook waiting"
@@ -388,6 +394,37 @@ class ThemeTests(unittest.TestCase):
                 "claude-hook waiting"
             )
         )
+
+    def test_spaces_agent_hooks_replace_legacy_direct_reporter(self) -> None:
+        reporter = (
+            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
+            / "hooks" / "claude-hook"
+        )
+        reporter.parent.mkdir(parents=True, exist_ok=True)
+        reporter.write_text("#!/bin/sh\n")
+        self.paths.codex_hooks.parent.mkdir(parents=True)
+        legacy = f"{reporter} waiting"
+        self.paths.codex_hooks.write_text(
+            __import__("json").dumps({
+                "hooks": {
+                    "PermissionRequest": [{
+                        "hooks": [{"type": "command", "command": legacy, "async": True}]
+                    }]
+                }
+            })
+        )
+
+        _ensure_spaces_agent_hooks(self.paths)
+
+        codex = __import__("json").loads(self.paths.codex_hooks.read_text())
+        commands = [
+            handler["command"]
+            for group in codex["hooks"]["PermissionRequest"]
+            for handler in group["hooks"]
+        ]
+        self.assertEqual(len(commands), 1)
+        self.assertNotEqual(commands[0], legacy)
+        self.assertTrue(commands[0].endswith("claude-hook waiting"))
 
     def test_spaces_agent_hooks_preserve_invalid_user_configuration(self) -> None:
         reporter = (

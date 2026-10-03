@@ -68,8 +68,8 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
-- [ ] Validate the installed Codex and Claude Spaces attention hooks after Codex `/hooks` trust review and a fresh agent session
-- [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients so Spaces does not retain closed Office icons
+- [ ] Validate Claude Spaces attention hooks; Codex 0.160.0 hook execution, active-shell routing, PID association, and visible waiting badge are verified
+- [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients so Spaces does not retain closed Office icons; reproduced as the upstream `RemoteApp Marker Window`, with rootless Podman also making `winapps killrdp` track the wrapper PID instead of `xfreerdp3`
 - [ ] Reconfirm in the pinned VM that Olio plugin-facade teardown errors are gone; exact 4.0.4 stock panel null-style warnings are classified separately and all other runtime errors still fail
 
 ## Deblob

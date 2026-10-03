@@ -167,6 +167,14 @@ class ThemePaths:
         return self.repo_root / "themes" / THEME_NAME / "bin" / "omarchy-launch-shell"
 
     @property
+    def spaces_agent_template(self) -> Path:
+        return self.repo_root / "themes" / THEME_NAME / "bin" / "omarchy-spaces-agent"
+
+    @property
+    def spaces_agent_command(self) -> Path:
+        return self.state_root / "bin" / "omarchy-spaces-agent"
+
+    @property
     def theme_assets(self) -> Path:
         return self.repo_root / "themes" / THEME_NAME / "omarchy-theme"
 
@@ -673,6 +681,39 @@ def _append_command_hook(
     )
 
 
+def _remove_command_hook(config: dict[str, object], event: str, command: str) -> None:
+    hooks = config.get("hooks")
+    if not isinstance(hooks, dict):
+        return
+    groups = hooks.get(event)
+    if not isinstance(groups, list):
+        return
+
+    kept_groups: list[object] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            kept_groups.append(group)
+            continue
+        handlers = group.get("hooks")
+        if not isinstance(handlers, list):
+            kept_groups.append(group)
+            continue
+        kept_handlers = [
+            handler
+            for handler in handlers
+            if not (
+                isinstance(handler, dict)
+                and handler.get("type") == "command"
+                and handler.get("command") == command
+            )
+        ]
+        if kept_handlers:
+            next_group = dict(group)
+            next_group["hooks"] = kept_handlers
+            kept_groups.append(next_group)
+    hooks[event] = kept_groups
+
+
 def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
     reporter = (
         paths.home
@@ -685,8 +726,14 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
     )
     if not reporter.is_file():
         raise ThemeError(f"Spaces agent reporter is missing: {reporter}")
+    if not paths.spaces_agent_template.is_file():
+        raise ThemeError(f"Spaces agent wrapper is missing: {paths.spaces_agent_template}")
+
+    _write_atomic(paths.spaces_agent_command, paths.spaces_agent_template.read_text())
+    paths.spaces_agent_command.chmod(0o755)
 
     base = shlex.quote(str(reporter))
+    wrapper = shlex.quote(str(paths.spaces_agent_command))
     codex = _read_json_object(paths.codex_hooks, "Codex hooks")
     for event, state in (
         ("UserPromptSubmit", "working"),
@@ -697,7 +744,10 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
         ("Stop", "waiting"),
         ("SessionEnd", "end"),
     ):
-        _append_command_hook(codex, event, f"{base} {state}")
+        legacy = f"{base} {state}"
+        command = f"{wrapper} {base} {state}"
+        _remove_command_hook(codex, event, legacy)
+        _append_command_hook(codex, event, command)
 
     claude = _read_json_object(paths.claude_settings, "Claude")
     for event, state in (
@@ -707,7 +757,10 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
         ("Stop", "done"),
         ("SessionEnd", "end"),
     ):
-        _append_command_hook(claude, event, f"{base} {state}")
+        legacy = f"{base} {state}"
+        command = f"{wrapper} {base} {state}"
+        _remove_command_hook(claude, event, legacy)
+        _append_command_hook(claude, event, command)
 
     _write_atomic(paths.codex_hooks, json.dumps(codex, indent=2, ensure_ascii=False) + "\n")
     _write_atomic(paths.claude_settings, json.dumps(claude, indent=2, ensure_ascii=False) + "\n")
