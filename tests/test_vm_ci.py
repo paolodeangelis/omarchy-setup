@@ -254,6 +254,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertNotIn("acceptance-upstream", guest)
         self.assertNotIn("acceptance.d/", guest)
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
+        self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)

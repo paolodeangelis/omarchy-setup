@@ -65,13 +65,13 @@ checks() {
   [[ -z $(hyprctl configerrors) ]]
 }
 agent_hooks_configured() {
-  local reporter="$HOME/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook"
-  [[ -x $reporter ]]
-  jq -e --arg command "$reporter waiting" '
+  local wrapper="$STATE_ROOT/bin/omarchy-spaces-agent"
+  [[ -x $wrapper ]]
+  jq -e --arg command "$wrapper waiting" '
     [.hooks.PermissionRequest[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.codex/hooks.json" >/dev/null
-  jq -e --arg command "$reporter waiting" '
+  jq -e --arg command "$wrapper waiting" '
     [.hooks.Notification[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.claude/settings.json" >/dev/null
