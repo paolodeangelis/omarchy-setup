@@ -1,6 +1,7 @@
 """Disposable-guest companion panel evidence; not an animation quality oracle."""
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -28,6 +29,26 @@ def current_boot_shell_log():
 def text_visible(text, expected):
     """Match OCR text without treating capitalization noise as a UI failure."""
     return expected.casefold() in text.casefold()
+
+
+def notification_crop_geometry(width, height):
+    """Crop the right-side archive's first cards, scaled to the captured display."""
+    crop_width = round(width * 0.328125)
+    crop_height = round(height * 0.3125)
+    left = width - crop_width
+    top = round(height * 0.125)
+    return f"{crop_width}x{crop_height}+{left}+{top}"
+
+
+def notification_archive_ocr(screenshot, output):
+    image_tool = shutil.which("magick") or shutil.which("convert")
+    if not image_tool:
+        raise RuntimeError("ImageMagick is required to inspect the notification panel crop")
+    dimensions = run("identify", "-format", "%w %h", str(screenshot))
+    width, height = map(int, dimensions.split())
+    crop = output / "notification-center-ocr-crop.png"
+    run(image_tool, str(screenshot), "-crop", notification_crop_geometry(width, height), "+repage", str(crop))
+    return run("tesseract", str(crop), "stdout", "--psm", "6")
 
 
 def capture_panel(output, plugin, delay=2):
@@ -70,7 +91,7 @@ def main():
         capture_panel(output, plugin)
 
     screenshot = capture_panel(output, "jankeesvw.notification-center", delay=3)
-    text = run("tesseract", str(screenshot), "stdout")
+    text = notification_archive_ocr(screenshot, output)
     (output / "jankeesvw.notification-center-ocr.txt").write_text(text)
     if "Notification archive integration probe" not in text:
         raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")

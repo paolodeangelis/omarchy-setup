@@ -257,6 +257,11 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertTrue(desktop.text_visible("G shutdown", "Shutdown"))
         self.assertFalse(desktop.text_visible("System menu", "Shutdown"))
 
+    def test_notification_ocr_crop_scales_to_right_side_panel(self):
+        desktop = module("desktop")
+        self.assertEqual(desktop.notification_crop_geometry(1280, 800), "420x250+860+100")
+        self.assertEqual(desktop.notification_crop_geometry(1920, 1080), "630x338+1290+135")
+
     def test_guest_acceptance_is_project_focused(self):
         guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
         self.assertNotIn("acceptance-upstream", guest)
