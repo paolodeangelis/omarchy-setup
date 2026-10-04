@@ -107,7 +107,9 @@ jobs:
 
   fresh_candidate:
     name: Fresh Omarchy ${{ needs.release.outputs.candidate }}
-    needs: release
+    needs:
+      - release
+      - version_baseline
     if: needs.release.outputs.run_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
@@ -117,7 +119,9 @@ jobs:
 
   upgrade_candidate:
     name: Upgrade ${{ needs.release.outputs.baseline }} to ${{ needs.release.outputs.candidate }}
-    needs: release
+    needs:
+      - release
+      - fresh_candidate
     if: needs.release.outputs.run_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
