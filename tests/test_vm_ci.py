@@ -102,6 +102,39 @@ class VmCiTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         pause.assert_called_once_with(1)
 
+    def test_shell_readiness_retries_only_transient_startup_error(self):
+        helper = Path(__file__).parent / "vm" / "shell-readiness.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "omarchy-shell"
+            state = Path(directory) / "calls"
+            command.write_text(
+                "#!/bin/bash\n"
+                f"state={str(state)!r}\n"
+                "count=0; [[ ! -f $state ]] || read -r count < $state\n"
+                "count=$((count + 1)); printf '%s\\n' \"$count\" > $state\n"
+                "if ((count < 3)); then echo 'omarchy-shell is not responding' >&2; exit 1; fi\n"
+                "exit 0\n"
+            )
+            command.chmod(0o755)
+            env = {**os.environ, "PATH": f"{directory}:{os.environ['PATH']}"}
+            completed = subprocess.run(
+                ["bash", "-c", f"source {helper}; wait_for_shell 3 0"],
+                env=env, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(state.read_text().strip(), "3")
+
+            command.write_text("#!/bin/bash\necho 'permission denied' >&2\nexit 1\n")
+            command.chmod(0o755)
+            state.unlink()
+            completed = subprocess.run(
+                ["bash", "-c", f"source {helper}; wait_for_shell 3 0"],
+                env=env, text=True, capture_output=True, check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("permission denied", completed.stderr)
+            self.assertFalse(state.exists())
+
     def test_cli_skip_does_not_fetch_iso(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release.json"

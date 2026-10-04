@@ -3,6 +3,7 @@
 set -euo pipefail
 VM_TEST_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SOURCE_ROOT=$(cd -- "$VM_TEST_DIR/../.." && pwd)
+source "$VM_TEST_DIR/shell-readiness.sh"
 ARTIFACTS=/tmp/omarchy-acceptance/setup
 mkdir -p "$ARTIFACTS"
 exec > >(tee -a "$ARTIFACTS/guest.log") 2>&1
@@ -70,7 +71,7 @@ session() {
   [[ -n $OMARCHY_PATH ]]
   export QML2_IMPORT_PATH="$OMARCHY_PATH/shell"
   export PATH="$OMARCHY_PATH/bin:$HOME/.local/bin:$PATH"
-  omarchy-shell shell ping
+  wait_for_shell
 }
 check_version() {
   local expected=$1 actual
