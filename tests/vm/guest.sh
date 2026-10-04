@@ -66,12 +66,13 @@ checks() {
 }
 agent_hooks_configured() {
   local wrapper="$STATE_ROOT/bin/omarchy-spaces-agent"
-  [[ -x $wrapper ]]
-  jq -e --arg command "$wrapper waiting" '
+  local reporter="$HOME/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook"
+  [[ -x $wrapper && -x $reporter ]]
+  jq -e --arg command "$wrapper $reporter waiting" '
     [.hooks.PermissionRequest[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.codex/hooks.json" >/dev/null
-  jq -e --arg command "$wrapper waiting" '
+  jq -e --arg command "$wrapper $reporter waiting" '
     [.hooks.Notification[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.claude/settings.json" >/dev/null
