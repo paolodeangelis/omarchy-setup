@@ -301,12 +301,40 @@ def _run_plugin_command(
 
 
 class OmarchyThemeBackend:
+    @staticmethod
+    def _ensure_blob_build_dependencies() -> None:
+        package = "qt6-shadertools"
+        installed = subprocess.run(
+            ("pacman", "-Q", package), text=True, capture_output=True, check=False
+        )
+        if installed.returncode == 0:
+            return
+
+        try:
+            # ShaderTools is a build-time dependency and can be dropped by
+            # upstream package transitions. Reacquire it through Omarchy's
+            # supported package helper before rebuilding the optional module.
+            subprocess.run(("omarchy", "pkg", "add", package), check=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise ThemeError(
+                f"could not install required theme build dependency {package}"
+            ) from error
+
+        installed = subprocess.run(
+            ("pacman", "-Q", package), text=True, capture_output=True, check=False
+        )
+        if installed.returncode != 0:
+            raise ThemeError(
+                f"Omarchy package helper returned without installing {package}"
+            )
+
     def build_blobs(self, paths: ThemePaths, destination: Path) -> None:
         if not paths.uv.is_file():
             raise ThemeError("uv is not initialized; run 'omarchy-setup init' first")
         if not paths.blobs_source.joinpath("CMakeLists.txt").is_file():
             raise ThemeError(f"missing vendored Caelestia Blobs source: {paths.blobs_source}")
 
+        self._ensure_blob_build_dependencies()
         paths.theme_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="blobs-build-", dir=paths.theme_root) as temporary:
             build = Path(temporary) / "build"

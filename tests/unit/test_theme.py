@@ -126,6 +126,43 @@ class ThemeTests(unittest.TestCase):
             (ui / "KeyboardPanel.qml").read_bytes()
         ).hexdigest()
 
+    def test_blob_build_installs_missing_qt_shadertools_via_omarchy(self) -> None:
+        package_missing = subprocess.CompletedProcess(
+            args=("pacman", "-Q", "qt6-shadertools"), returncode=1, stdout="", stderr=""
+        )
+        package_installed = subprocess.CompletedProcess(
+            args=("pacman", "-Q", "qt6-shadertools"), returncode=0,
+            stdout="qt6-shadertools 6.11.2-1\n", stderr="",
+        )
+        with patch(
+            "omarchy_setup.modules.theme.core.subprocess.run",
+            side_effect=(package_missing, subprocess.CompletedProcess((), 0), package_installed),
+        ) as run:
+            OmarchyThemeBackend._ensure_blob_build_dependencies()
+
+        self.assertEqual(run.call_args_list[0].args[0], ("pacman", "-Q", "qt6-shadertools"))
+        self.assertEqual(
+            run.call_args_list[1].args[0], ("omarchy", "pkg", "add", "qt6-shadertools")
+        )
+        self.assertEqual(run.call_args_list[2].args[0], ("pacman", "-Q", "qt6-shadertools"))
+
+    def test_blob_build_skips_dependency_install_when_already_present(self) -> None:
+        package_installed = subprocess.CompletedProcess(
+            args=("pacman", "-Q", "qt6-shadertools"), returncode=0,
+            stdout="qt6-shadertools 6.11.2-1\n", stderr="",
+        )
+        with patch(
+            "omarchy_setup.modules.theme.core.subprocess.run", return_value=package_installed
+        ) as run:
+            OmarchyThemeBackend._ensure_blob_build_dependencies()
+
+        run.assert_called_once_with(
+            ("pacman", "-Q", "qt6-shadertools"),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
     def test_maintenance_uses_installed_root_and_preserves_arguments_and_status(self) -> None:
         system_bin = self.paths.system_omarchy / "bin"
         system_bin.mkdir()
