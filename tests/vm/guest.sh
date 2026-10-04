@@ -124,7 +124,11 @@ if [[ $PHASE == initial ]]; then
   checks configured
   if [[ $MODE == upgrade ]]; then
     # Do not reapply our setup before checking the upgraded installation.
-    timeout 5400 omarchy update -y </dev/null
+    # The updater's `script` logging wrapper creates a nested PTY. Sudo caches
+    # credentials per terminal, so that PTY cannot use the authorization kept
+    # alive above. The acceptance harness already records this command's full
+    # output; skip only the redundant logging wrapper and run the real update.
+    OMARCHY_UPDATE_LOGGED=1 timeout 5400 omarchy update -y </dev/null
     check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
   fi
 elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
