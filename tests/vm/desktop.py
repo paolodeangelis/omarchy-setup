@@ -93,7 +93,9 @@ def main():
     screenshot = capture_panel(output, "jankeesvw.notification-center", delay=3)
     text = notification_archive_ocr(screenshot, output)
     (output / "jankeesvw.notification-center-ocr.txt").write_text(text)
-    if "Notification archive integration probe" not in text:
+    # The archive retains one probe per tested theme mode. OCR may misread
+    # the final word ("probe" -> "prove") when multiple cards are visible.
+    if not text_visible(text, "Notification archive integration"):
         raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")
 
     try:

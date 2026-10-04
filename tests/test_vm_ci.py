@@ -79,6 +79,15 @@ class VmCiTests(unittest.TestCase):
             self.assertEqual(live.getvalue(), "vm progress\n")
             self.assertEqual(log_path.read_text(), "vm progress\n")
 
+    def test_notification_archive_ocr_allows_minor_last_word_misread(self):
+        desktop = module("desktop")
+        self.assertTrue(desktop.text_visible(
+            "Notification archive integration prove", "Notification archive integration"
+        ))
+        self.assertFalse(desktop.text_visible(
+            "Notification archive content not visible", "Notification archive integration"
+        ))
+
     def test_reject_unknown_mode(self):
         with self.assertRaises(ValueError):
             self.resolve.plan(self.config, "typo", "v4.0.5")
@@ -268,7 +277,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertNotIn("acceptance.d/", guest)
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
         self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
-        self.assertIn('$wrapper $reporter waiting', guest)
+        self.assertIn('$wrapper waiting', guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
