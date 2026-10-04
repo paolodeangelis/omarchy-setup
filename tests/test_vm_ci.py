@@ -97,7 +97,7 @@ class VmCiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release.json"
             with patch.object(sys, "argv", ["resolve", "latest", "--output", str(output)]), \
-                    patch.object(self.resolve, "fetch", return_value='{"tag_name":"v4.0.4"}') as fetch, \
+                    patch.object(self.resolve, "fetch", return_value='{"tag_name":"v4.0.3"}') as fetch, \
                     patch.dict(os.environ, {"GITHUB_OUTPUT": str(Path(directory) / "outputs")}):
                 self.resolve.main()
             self.assertFalse(json.loads(output.read_text())["run"])

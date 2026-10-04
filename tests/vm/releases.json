@@ -1,7 +1,7 @@
 {
-  "baseline": "4.0.4",
-  "baseline_package": "4.0.4-1",
-  "baseline_iso_sha256": "ddeded2758c48318d201dfdac905ecb28f570441883f0c052ea3cd5d05acf92d",
+  "baseline": "4.0.3",
+  "baseline_package": "4.0.3-1",
+  "baseline_iso_sha256": "03d60bc74306dca51f96e1a84b690871d8d606826b260edd0208962da8507d14",
   "upgrade_drills": {
     "4.0.3": {
       "iso_sha256": "03d60bc74306dca51f96e1a84b690871d8d606826b260edd0208962da8507d14"
