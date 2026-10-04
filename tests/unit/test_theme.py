@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import os
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -123,6 +125,29 @@ class ThemeTests(unittest.TestCase):
         self.digest = __import__("hashlib").sha256(
             (ui / "KeyboardPanel.qml").read_bytes()
         ).hexdigest()
+
+    def test_maintenance_uses_installed_root_and_preserves_arguments_and_status(self) -> None:
+        system_bin = self.paths.system_omarchy / "bin"
+        system_bin.mkdir()
+        for name in ("omarchy-update", "omarchy-version", "omarchy-menu"):
+            command = system_bin / name
+            command.write_text(
+                '#!/bin/bash\n# omarchy:summary=Fixture command\n'
+                'printf "%s\\n" "$OMARCHY_PATH" "${PATH%%:*}" "$@"\nexit 17\n'
+            )
+            command.chmod(0o755)
+        with patch("omarchy_setup.modules.theme.core.SUPPORTED_KEYBOARD_PANEL_SHA256", {self.digest}):
+            apply_theme(self.paths, self.backend)
+        environment = dict(os.environ, OMARCHY_PATH=str(self.paths.overlay_root))
+        for name in ("omarchy-update", "omarchy-version"):
+            wrapper = self.paths.overlay_root / "bin" / name
+            result = subprocess.run([str(wrapper), "argument with spaces", "-y"],
+                                    env=environment, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 17)
+            self.assertEqual(result.stdout.splitlines(), [str(self.paths.system_omarchy),
+                             str(system_bin), "argument with spaces", "-y"])
+            self.assertIn("# omarchy:summary=Fixture command", wrapper.read_text())
+        self.assertTrue((self.paths.overlay_root / "bin/omarchy-menu").is_symlink())
 
     def test_invalid_theme_toml_is_rejected_before_activation(self) -> None:
         invalid = self.paths.state_root / "invalid-shell.toml"

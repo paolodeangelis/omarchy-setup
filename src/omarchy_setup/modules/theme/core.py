@@ -829,7 +829,23 @@ def _build_overlay(paths: ThemePaths, backend: ThemeBackend, staging: Path) -> s
             overlay_bin = staging / "bin"
             overlay_bin.mkdir()
             for command in child.iterdir():
-                if command.name != "omarchy-launch-shell":
+                if command.name in {"omarchy-update", "omarchy-version"}:
+                    # The shell overlay is not an Omarchy development checkout.
+                    # System maintenance and version detection belong to the
+                    # installed distribution, including their child helpers.
+                    wrapper = overlay_bin / command.name
+                    metadata = "\n".join(
+                        line for line in command.read_text().splitlines()
+                        if line.startswith("# omarchy:")
+                    )
+                    wrapper.write_text(
+                        "#!/bin/bash\n" + metadata + "\n"
+                        f"export OMARCHY_PATH={shlex.quote(str(paths.system_omarchy))}\n"
+                        'export PATH="$OMARCHY_PATH/bin:$PATH"\n'
+                        f'exec {shlex.quote(str(command))} "$@"\n'
+                    )
+                    wrapper.chmod(0o755)
+                elif command.name != "omarchy-launch-shell":
                     (overlay_bin / command.name).symlink_to(command)
             if not paths.launcher_template.is_file():
                 raise ThemeError(f"overlay launcher template not found: {paths.launcher_template}")

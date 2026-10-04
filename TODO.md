@@ -89,6 +89,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
 - [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a six-hour release detector
 - [ ] Validate the reviewed Omarchy 4.0.3 -> 4.0.4 drill (fresh 4.0.3, fresh 4.0.4, and configured upgrade) in GitHub Actions
+  - Run `37202409453` confirms the sudo fix passes pruning/snapshot creation; upgrade then rejected the theme overlay as a non-Git dev checkout. Added installed-root routing for update/version with executable fixture coverage; full VM upgrade/reboot verification remains pending.
 - [ ] Re-run the reviewed drill after bounded retries for transient `omarchy-shell is not responding` plugin IPC startup failures
 - [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
