@@ -97,14 +97,21 @@ agent_hooks_configured() {
   local wrapper="$STATE_ROOT/bin/omarchy-spaces-agent"
   local reporter="$HOME/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook"
   [[ -x $wrapper && -x $reporter ]]
-  jq -e --arg command "$wrapper $reporter waiting" '
-    [.hooks.PermissionRequest[].hooks[] | select(.type == "command") | .command]
+  jq -e --arg command "$wrapper waiting" '
+    [.hooks.PermissionRequest[].hooks[]
+      | select(.type == "command" and .command == $command and .async == false)]
+    | length == 1
+  ' "$HOME/.codex/hooks.json" >/dev/null
+  jq -e --arg command "$wrapper end" '
+    [.hooks.Interrupt[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.codex/hooks.json" >/dev/null
-  jq -e --arg command "$wrapper $reporter waiting" '
+  jq -e --arg command "$wrapper waiting" '
     [.hooks.Notification[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.claude/settings.json" >/dev/null
+  printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" waiting
+  printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" end
 }
 update_system() {
   timeout --kill-after=30s 2400 "$STATE_ROOT/environment/bin/python" \

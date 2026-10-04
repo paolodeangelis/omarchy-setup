@@ -646,7 +646,8 @@ def _read_json_object(path: Path, label: str) -> dict[str, object]:
 
 
 def _append_command_hook(
-    config: dict[str, object], event: str, command: str, *, timeout: int = 3
+    config: dict[str, object], event: str, command: str, *, timeout: int = 3,
+    asynchronous: bool = True,
 ) -> None:
     hooks = config.setdefault("hooks", {})
     if not isinstance(hooks, dict):
@@ -659,13 +660,18 @@ def _append_command_hook(
         if not isinstance(group, dict):
             continue
         handlers = group.get("hooks", [])
-        if isinstance(handlers, list) and any(
-            isinstance(handler, dict)
-            and handler.get("type") == "command"
-            and handler.get("command") == command
-            for handler in handlers
-        ):
-            return
+        if isinstance(handlers, list):
+            for handler in handlers:
+                if (
+                    isinstance(handler, dict)
+                    and handler.get("type") == "command"
+                    and handler.get("command") == command
+                ):
+                    # Reconcile existing entries too, so re-running theme
+                    # setup migrates previously installed async hooks.
+                    handler["async"] = asynchronous
+                    handler["timeout"] = timeout
+                    return
 
     groups.append(
         {
@@ -673,7 +679,7 @@ def _append_command_hook(
                 {
                     "type": "command",
                     "command": command,
-                    "async": True,
+                    "async": asynchronous,
                     "timeout": timeout,
                 }
             ]
@@ -725,7 +731,7 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
         / "claude-hook"
     )
     if not reporter.is_file():
-        raise ThemeError(f"Spaces agent reporter is missing: {reporter}")
+        raise ThemeError(f"Spaces agent integration is missing: {reporter}")
     if not paths.spaces_agent_template.is_file():
         raise ThemeError(f"Spaces agent wrapper is missing: {paths.spaces_agent_template}")
 
@@ -735,18 +741,20 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
     base = shlex.quote(str(reporter))
     wrapper = shlex.quote(str(paths.spaces_agent_command))
     codex = _read_json_object(paths.codex_hooks, "Codex hooks")
-    _remove_command_hook(codex, "Stop", f"{wrapper} {base} waiting")
     for event, state in (
         ("UserPromptSubmit", "working"),
         ("PostToolUse", "working"),
         ("PermissionRequest", "waiting"),
         ("Stop", "done"),
+        ("Interrupt", "end"),
         ("SessionEnd", "end"),
     ):
         legacy = f"{base} {state}"
-        command = f"{wrapper} {base} {state}"
+        old_command = f"{wrapper} {base} {state}"
+        command = f"{wrapper} {state}"
         _remove_command_hook(codex, event, legacy)
-        _append_command_hook(codex, event, command)
+        _remove_command_hook(codex, event, old_command)
+        _append_command_hook(codex, event, command, asynchronous=False)
 
     claude = _read_json_object(paths.claude_settings, "Claude")
     for event, state in (
@@ -757,9 +765,11 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
         ("SessionEnd", "end"),
     ):
         legacy = f"{base} {state}"
-        command = f"{wrapper} {base} {state}"
+        old_command = f"{wrapper} {base} {state}"
+        command = f"{wrapper} {state}"
         _remove_command_hook(claude, event, legacy)
-        _append_command_hook(claude, event, command)
+        _remove_command_hook(claude, event, old_command)
+        _append_command_hook(claude, event, command, asynchronous=False)
 
     _write_atomic(paths.codex_hooks, json.dumps(codex, indent=2, ensure_ascii=False) + "\n")
     _write_atomic(paths.claude_settings, json.dumps(claude, indent=2, ensure_ascii=False) + "\n")

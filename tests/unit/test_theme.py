@@ -399,7 +399,7 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(len(codex["hooks"]["PermissionRequest"]), 1)
         self.assertTrue(
             codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"].endswith(
-                "claude-hook waiting"
+                "omarchy-spaces-agent waiting"
             )
         )
         self.assertIn(
@@ -410,16 +410,18 @@ class ThemeTests(unittest.TestCase):
         self.assertTrue(self.paths.spaces_agent_command.stat().st_mode & 0o100)
         self.assertTrue(
             codex["hooks"]["Stop"][0]["hooks"][0]["command"].endswith(
-                "claude-hook done"
+                "omarchy-spaces-agent done"
             )
         )
         self.assertEqual(len(codex["hooks"]["Stop"]), 1)
         claude = __import__("json").loads(self.paths.claude_settings.read_text())
-        self.assertTrue(
-            claude["hooks"]["Notification"][0]["hooks"][0]["command"].endswith(
-                "claude-hook waiting"
-            )
-        )
+        self.assertTrue(claude["hooks"]["Notification"][0]["hooks"][0]["command"].endswith(
+            "omarchy-spaces-agent waiting"
+        ))
+        self.assertFalse(claude["hooks"]["Notification"][0]["hooks"][0]["async"])
+        for event in ("UserPromptSubmit", "PostToolUse", "PermissionRequest", "Stop", "Interrupt", "SessionEnd"):
+            self.assertFalse(codex["hooks"][event][0]["hooks"][0]["async"])
+        self.assertTrue((self.paths.spaces_agent_command).read_text().find('agent "$session" "$state"') >= 0)
 
     def test_spaces_agent_hooks_replace_legacy_direct_reporter(self) -> None:
         reporter = (
@@ -450,7 +452,56 @@ class ThemeTests(unittest.TestCase):
         ]
         self.assertEqual(len(commands), 1)
         self.assertNotEqual(commands[0], legacy)
-        self.assertTrue(commands[0].endswith("claude-hook waiting"))
+        self.assertTrue(commands[0].endswith("omarchy-spaces-agent waiting"))
+        self.assertFalse(
+            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["async"]
+        )
+
+    def test_spaces_agent_hook_waits_for_ordered_shell_ipc(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            capture = Path(directory) / "arguments"
+            completed = Path(directory) / "completed"
+            fake_commands = {
+                "systemctl": "#!/bin/sh\nexit 0\n",
+                "jq": "#!/bin/sh\ncat >/dev/null\nprintf 'fixture-session\\n'\n",
+                "omarchy-shell": (
+                    "#!/bin/sh\n"
+                    "printf '%s\\n' \"$@\" > \"$SPACES_AGENT_CAPTURE\"\n"
+                    "sleep 0.1\n"
+                    "touch \"$SPACES_AGENT_COMPLETE\"\n"
+                ),
+            }
+            for name, script in fake_commands.items():
+                command = fake_bin / name
+                command.write_text(script)
+                command.chmod(0o755)
+            wrapper = Path(directory) / "omarchy-spaces-agent"
+            wrapper.write_text(self.paths.spaces_agent_template.read_text())
+            wrapper.chmod(0o755)
+
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": f"{fake_bin}{os.pathsep}{environment['PATH']}",
+                "SPACES_AGENT_CAPTURE": str(capture),
+                "SPACES_AGENT_COMPLETE": str(completed),
+            })
+            result = subprocess.run(
+                [str(wrapper), "waiting"],
+                input='{"session_id":"fixture-session"}\n',
+                text=True,
+                env=environment,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(completed.is_file())
+            arguments = capture.read_text().splitlines()
+            self.assertEqual(arguments[:4], [
+                "tornikegomareli.spaces", "agent", "fixture-session", "waiting"
+            ])
+            self.assertRegex(arguments[4], r"^\d+(,\d+)*$")
 
     def test_spaces_agent_hooks_preserve_invalid_user_configuration(self) -> None:
         reporter = (

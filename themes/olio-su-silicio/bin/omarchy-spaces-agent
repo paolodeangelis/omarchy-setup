@@ -7,4 +7,28 @@ if [[ -n $active_path && -f $active_path/shell/shell.qml ]]; then
   export OMARCHY_PATH=$active_path
 fi
 
+# Codex and Claude hook entry point. Keep this synchronous: backgrounding the
+# IPC lets an older "waiting" event overtake a later completion event.
+case "${1:-}" in
+  working|waiting|done|end)
+    state=$1
+    payload=$(cat)
+    session=$(jq -r '.session_id // empty' <<<"$payload")
+    [[ -n $session ]] || session="pid$PPID"
+
+    pids=""
+    pid=$PPID
+    while [[ $pid -gt 1 && -r /proc/$pid/stat ]]; do
+      pids+="${pids:+,}$pid"
+      stat=$(</proc/$pid/stat)
+      stat=${stat##*) }
+      pid=$(cut -d' ' -f2 <<<"$stat")
+    done
+
+    exec omarchy-shell tornikegomareli.spaces agent "$session" "$state" "$pids" \
+      >/dev/null 2>&1
+    ;;
+esac
+
+# Retain the old wrapper behavior for callers that pass a command to execute.
 exec "$@"
