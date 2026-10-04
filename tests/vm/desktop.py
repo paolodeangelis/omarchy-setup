@@ -21,6 +21,10 @@ def validate_log(log):
         raise RuntimeError("shell runtime errors detected; inspect shell-runtime.log")
 
 
+def current_boot_shell_log():
+    return run("journalctl", "--user", "-b", "-t", "omarchy-shell", "--no-pager", "-o", "cat")
+
+
 def text_visible(text, expected):
     """Match OCR text without treating capitalization noise as a UI failure."""
     return expected.casefold() in text.casefold()
@@ -88,7 +92,7 @@ def main():
     run("grim", str(output / "volume-osd.png"))
     if osd.wait() != 0:
         raise RuntimeError("OSD command failed")
-    log = run("journalctl", "--user", "-t", "omarchy-shell", "--since", sys.argv[2], "--no-pager", "-o", "cat")
+    log = current_boot_shell_log()
     (output / "shell-runtime.log").write_text(log)
     validate_log(log)
 

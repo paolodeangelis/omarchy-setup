@@ -244,6 +244,14 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "TypeError: Cannot read property 'foreground' of null"
         )
 
+    def test_desktop_log_reads_current_boot_not_script_start_time(self):
+        desktop = module("desktop")
+        with patch.object(desktop, "run", return_value="Shell configuration loaded") as run:
+            self.assertEqual(desktop.current_boot_shell_log(), "Shell configuration loaded")
+        run.assert_called_once_with(
+            "journalctl", "--user", "-b", "-t", "omarchy-shell", "--no-pager", "-o", "cat"
+        )
+
     def test_desktop_ocr_matching_ignores_capitalization_only(self):
         desktop = module("desktop")
         self.assertTrue(desktop.text_visible("G shutdown", "Shutdown"))

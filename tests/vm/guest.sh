@@ -15,7 +15,6 @@ LAUNCHER="$HOME/.local/bin/omarchy-setup"
 SETUP_ROOT="$HOME/.omarchy-setup"
 STATE_ROOT="$HOME/.local/state/omarchy-setup"
 UPSTREAM_TESTS=$(cd -- "$SOURCE_ROOT/.." && pwd)
-STARTED=$(date --iso-8601=seconds)
 KEEPALIVE=''
 CURRENT_STEP=''
 STEP_STARTED=0
@@ -51,7 +50,7 @@ cleanup() {
     cp /tmp/omarchy-update.log "$ARTIFACTS/update.log" || true
   fi
   [[ -z $KEEPALIVE ]] || kill "$KEEPALIVE" 2>/dev/null || true
-  journalctl --user -t omarchy-shell --since "$STARTED" --no-pager > "$ARTIFACTS/shell-$PHASE.log" 2>&1 || true
+  journalctl --user -b -t omarchy-shell --no-pager > "$ARTIFACTS/shell-$PHASE.log" 2>&1 || true
   pacman -Q > "$ARTIFACTS/packages-$PHASE.txt" || true
   grim "$ARTIFACTS/final-$PHASE.png" || true
   printf '%s\n' "$result" > "$ARTIFACTS/exit-$PHASE.txt"
@@ -91,7 +90,7 @@ checks() {
   session
   mkdir -p "$ARTIFACTS/$stage"
   "$LAUNCHER" doctor --ui
-  "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage" "$STARTED"
+  "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage"
   [[ -z $(hyprctl configerrors) ]]
 }
 agent_hooks_configured() {
