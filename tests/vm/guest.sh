@@ -17,9 +17,39 @@ STATE_ROOT="$HOME/.local/state/omarchy-setup"
 UPSTREAM_TESTS=$(cd -- "$SOURCE_ROOT/.." && pwd)
 STARTED=$(date --iso-8601=seconds)
 KEEPALIVE=''
+CURRENT_STEP=''
+STEP_STARTED=0
+record_step() {
+  jq -cn --arg target "$MODE" --arg phase "$PHASE" --arg name "$CURRENT_STEP" \
+    --arg status "$1" --argjson exit_code "$2" --argjson seconds "$((SECONDS - STEP_STARTED))" \
+    '{target:$target,phase:$phase,name:$name,status:$status,exit_code:$exit_code,seconds:$seconds}' \
+    >> "$ARTIFACTS/results-$PHASE.jsonl"
+}
+step() {
+  CURRENT_STEP=$1
+  shift
+  STEP_STARTED=$SECONDS
+  echo "==> [$MODE/$PHASE] $CURRENT_STEP"
+  "$@"
+  record_step PASS 0
+  CURRENT_STEP=''
+}
 cleanup() {
   result=$?
   trap - EXIT
+  if [[ -n $CURRENT_STEP ]]; then
+    record_step FAIL "$result" || true
+  fi
+  CURRENT_STEP='Phase completion (includes ungrouped assertions)'
+  STEP_STARTED=$SECONDS
+  if (( result == 0 )); then
+    record_step PASS 0 || true
+  else
+    record_step FAIL "$result" || true
+  fi
+  if [[ -f /tmp/omarchy-update.log ]]; then
+    cp /tmp/omarchy-update.log "$ARTIFACTS/update.log" || true
+  fi
   [[ -z $KEEPALIVE ]] || kill "$KEEPALIVE" 2>/dev/null || true
   journalctl --user -t omarchy-shell --since "$STARTED" --no-pager > "$ARTIFACTS/shell-$PHASE.log" 2>&1 || true
   pacman -Q > "$ARTIFACTS/packages-$PHASE.txt" || true
@@ -46,7 +76,7 @@ session() {
 check_version() {
   local expected=$1 actual
   actual=$(omarchy version)
-  printf '%s\n' "$actual" > "$ARTIFACTS/version-$PHASE.txt"
+  printf '%s\n' "$actual" >> "$ARTIFACTS/version-$PHASE.txt"
   [[ ${actual%%-*} == "$expected" ]] || { echo "Expected $expected; installed $actual"; exit 1; }
 }
 authorize() {
@@ -77,8 +107,12 @@ agent_hooks_configured() {
     | index($command) != null
   ' "$HOME/.claude/settings.json" >/dev/null
 }
+update_system() {
+  timeout --kill-after=30s 2400 "$STATE_ROOT/environment/bin/python" \
+    "$SETUP_ROOT/tests/vm/update.py" </dev/null 2>&1 | tee /tmp/omarchy-update.log
+}
 if [[ $PHASE == initial ]]; then
-  check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
+  step 'Installed baseline version' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
   session
   # The official harness already proved installation and boot. Preserve one
   # stock screenshot and readiness check; do not make this utility's result
@@ -87,29 +121,29 @@ if [[ $PHASE == initial ]]; then
   grim "$ARTIFACTS/stock-desktop.png"
   [[ ! -e $SETUP_ROOT ]] || { echo 'Guest checkout must start absent'; exit 1; }
   cp -a "$SOURCE_ROOT" "$SETUP_ROOT"
-  "$SETUP_ROOT/omarchy-setup" init -y --no-progress
+  step 'Bootstrap' "$SETUP_ROOT/omarchy-setup" init -y --no-progress
   authorize
   environment_inode=$(stat -c %i "$STATE_ROOT/environment")
-  "$LAUNCHER" init -y --no-progress
+  step 'Repeat bootstrap' "$LAUNCHER" init -y --no-progress
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
-  PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
-  "$LAUNCHER" install all -y -d --no-progress
-  "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
+  step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
+  step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
+  step 'WinApps preparation plan only' "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-before-repeat.txt"
-  "$LAUNCHER" install all -y -d --no-progress
+  step 'Repeat program installation' "$LAUNCHER" install all -y -d --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
-  cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
+  step 'Program package idempotency' cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
-    "$LAUNCHER" theme "bar-$style" -y --no-progress
-    agent_hooks_configured
-    checks "$sequence-$style"
+    step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
+    step "Agent hook configuration $sequence/$style" agent_hooks_configured
+    step "Desktop checks $sequence/$style" checks "$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
-    cmp "$ARTIFACTS/state-before.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
+    step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
   done
-  "$LAUNCHER" theme restore -y --no-progress
+  step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
   omarchy-shell shell summon omarchy.menu '{}'
@@ -118,35 +152,35 @@ if [[ $PHASE == initial ]]; then
   omarchy-shell shell hide omarchy.menu
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
-  "$LAUNCHER" deblob -y --dry-run --no-progress
-  "$LAUNCHER" deblob -y --no-progress
-  "$LAUNCHER" deblob -y --no-progress
-  checks configured
+  step 'Deblob plan' "$LAUNCHER" deblob -y --dry-run --no-progress
+  step 'Deblob apply' "$LAUNCHER" deblob -y --no-progress
+  step 'Deblob repeat' "$LAUNCHER" deblob -y --no-progress
+  step 'Configured desktop checks' checks configured
   if [[ $MODE == upgrade ]]; then
     # Do not reapply our setup before checking the upgraded installation.
-    # The updater's `script` logging wrapper creates a nested PTY. Sudo caches
-    # credentials per terminal, so that PTY cannot use the authorization kept
-    # alive above. The acceptance harness already records this command's full
-    # output; skip only the redundant logging wrapper and run the real update.
-    OMARCHY_UPDATE_LOGGED=1 timeout 5400 omarchy update -y </dev/null
-    check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
+    step 'Configured baseline version before update' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
+    # Preserve the exact log consumed by upstream analysis; pipefail preserves
+    # updater errors. The harness reboots only after successful completion.
+    step 'Official system update (CI terminal adapter)' update_system
+    cp /tmp/omarchy-update.log "$ARTIFACTS/update.log"
+    step 'Installed candidate version' check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
   fi
 elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
-  check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
+  step 'Candidate version after reboot' check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
   UPSTREAM_TESTS="$UPSTREAM_TESTS/candidate/test"
   authorize
-  checks after-upgrade-before-reapply
+  step 'Desktop after reboot before reapply' checks after-upgrade-before-reapply
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
-    "$LAUNCHER" theme "bar-$style" -y --no-progress
-    agent_hooks_configured
-    checks "after-upgrade-$sequence-$style"
+    step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
+    step "Agent hook configuration $sequence/$style" agent_hooks_configured
+    step "Desktop checks $sequence/$style" checks "after-upgrade-$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before-post-upgrade.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
-    cmp "$ARTIFACTS/state-before-post-upgrade.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
+    step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before-post-upgrade.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
   done
-  "$LAUNCHER" theme restore -y --no-progress
+  step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
   omarchy-shell shell summon omarchy.menu '{}'
@@ -155,17 +189,17 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   omarchy-shell shell hide omarchy.menu
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
-  "$LAUNCHER" install all -y --no-progress
+  step 'Post-upgrade program installation' "$LAUNCHER" install all -y --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-before-repeat.txt"
-  "$LAUNCHER" install all -y --no-progress
+  step 'Repeat program installation' "$LAUNCHER" install all -y --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"
-  cmp "$ARTIFACTS/packages-post-upgrade-before-repeat.txt" "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"
-  "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
-  "$LAUNCHER" deblob -y --dry-run --no-progress
-  "$LAUNCHER" deblob -y --no-progress
-  "$LAUNCHER" deblob -y --no-progress
-  checks after-upgrade-configured
-  PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
+  step 'Program package idempotency' cmp "$ARTIFACTS/packages-post-upgrade-before-repeat.txt" "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"
+  step 'WinApps preparation plan only' "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
+  step 'Deblob plan' "$LAUNCHER" deblob -y --dry-run --no-progress
+  step 'Deblob apply' "$LAUNCHER" deblob -y --no-progress
+  step 'Deblob repeat' "$LAUNCHER" deblob -y --no-progress
+  step 'Configured desktop checks after upgrade' checks after-upgrade-configured
+  step 'Guest unit and integration suite after upgrade' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
 else
   echo "Invalid phase/mode $PHASE/$MODE"; exit 1
 fi

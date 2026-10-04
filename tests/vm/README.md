@@ -9,7 +9,7 @@ tests do not certify them.
 The shared workflow provisions QEMU, OVMF, ImageMagick and Tesseract on
 `ubuntu-24.04`, verifies `/dev/kvm`, and gives the guest 5 GiB. It adapts only
 reviewed host-path differences in the pinned official harness. The VM workflow
-is manual/release-triggered and never runs for pull requests. Guest internet
+is push/manual/release-triggered and never runs for pull requests. Guest internet
 access is required for repositories and AUR.
 
 In Actions, manually run:
@@ -27,11 +27,25 @@ Edit `releases.json` when deliberately advancing your workstation baseline.
 Review its checksum and the pinned official ISO harness commit together.
 
 The release watcher polls every six hours on the default branch and dispatches
-the two candidate workflows. GitHub schedules can be delayed. Its cache prevents
+the main compatibility workflow. GitHub schedules can be delayed. Its cache prevents
 routine duplicates, but cache eviction or a partial dispatch can cause a repeat;
 it is not an exactly-once release webhook. Failed runs can be rerun manually.
 
 ## Evidence and limits
+
+After fast checks, fresh baseline, fresh candidate, configured upgrade and the
+independent Ubuntu Windows test may run concurrently on separate hosted runners.
+Guest acceptance writes per-step JSONL results, durations and exit codes. The
+final summary reads those artifacts; missing records never imply success.
+Desktop groups and unit suites remain grouped results, with detailed logs in
+artifacts; individual GUI interaction coverage is still incomplete.
+
+CI executes a temporary copy of the installed updater with two guarded lifecycle
+changes: status refresh is bounded to 60 seconds, and the final interactive
+restart prompt is deferred to the harness's reboot. The existing authorized TTY
+is retained, and output is also written to the upstream-required update log.
+Unexpected updater structure fails closed. This tests an adapted unattended
+update, not the interactive updater's prompt handling.
 
 Actions handles triggers, permissions, runners and artifacts. Small Python
 helpers resolve exact releases/checksums and adapt the pinned upstream harness;

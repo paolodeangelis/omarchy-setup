@@ -71,7 +71,7 @@ jobs:
             echo '### WinApps compatibility layer'
             echo "Associated Omarchy candidate: ${CANDIDATE:-manual/PR run}"
             echo 'This direct-KVM job validates pinned WinApps, Podman, FreeRDP, Notepad, and Edge.'
-            echo 'The preceding configured-upgrade job validates omarchy-setup inside upgraded Omarchy.'
+            echo 'The separate configured-upgrade job tests omarchy-setup inside upgraded Omarchy; consult its result.'
             echo 'Windows does not run nested inside that Omarchy VM; same-VM WinApps rendering remains unclaimed.'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload selected diagnostics

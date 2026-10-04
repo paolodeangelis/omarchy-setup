@@ -99,7 +99,7 @@ jobs:
 
   version_baseline:
     name: Omarchy ${{ needs.release.outputs.baseline }}
-    needs: release
+    needs: [checks, release]
     uses: ./.github/workflows/omarchy-system.yml
     with:
       mode: pinned
@@ -108,8 +108,8 @@ jobs:
   fresh_candidate:
     name: Fresh Omarchy ${{ needs.release.outputs.candidate }}
     needs:
+      - checks
       - release
-      - version_baseline
     if: needs.release.outputs.run_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
@@ -120,8 +120,8 @@ jobs:
   upgrade_candidate:
     name: Upgrade ${{ needs.release.outputs.baseline }} to ${{ needs.release.outputs.candidate }}
     needs:
+      - checks
       - release
-      - fresh_candidate
     if: needs.release.outputs.run_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
@@ -134,16 +134,10 @@ jobs:
     needs:
       - checks
       - release
-      - version_baseline
-      - fresh_candidate
-      - upgrade_candidate
     if: >-
       always() &&
       needs.checks.result == 'success' &&
-      needs.release.result == 'success' &&
-      needs.version_baseline.result == 'success' &&
-      (needs.fresh_candidate.result == 'success' || needs.fresh_candidate.result == 'skipped') &&
-      (needs.upgrade_candidate.result == 'success' || needs.upgrade_candidate.result == 'skipped')
+      needs.release.result == 'success'
     uses: ./.github/workflows/winapps-smoke.yml
     with:
       candidate: ${{ needs.release.outputs.candidate }}
@@ -160,6 +154,13 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v5
+      - name: Download acceptance records and diagnostics
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          pattern: omarchy-*
+          path: report-input
       - name: Write compatibility summary
         env:
           CANDIDATE: ${{ needs.release.outputs.candidate }}
@@ -175,39 +176,4 @@ jobs:
           FRESH_CANDIDATE: ${{ needs.fresh_candidate.result }}
           UPGRADE_CANDIDATE: ${{ needs.upgrade_candidate.result }}
           WINAPPS: ${{ needs.winapps.result }}
-        run: |
-          status() {
-            case "$1" in
-              success) printf '✅ success' ;;
-              ''|skipped) printf '➖ not run' ;;
-              cancelled) printf '⚪ cancelled' ;;
-              *) printf '❌ %s' "$1" ;;
-            esac
-          }
-          {
-            echo '# Omarchy compatibility report'
-            echo
-            echo "Tested path: ${BASELINE:-unresolved} → ${CANDIDATE:-unresolved}"
-            echo "Newest official stable: ${CANDIDATE:-unresolved}"
-            echo
-            echo '| Check | Result |'
-            echo '|---|---|'
-            echo "| Release resolution | $(status "$RELEASE") |"
-            echo "| Pre-commit and Action syntax | $(status "$PRE_COMMIT") |"
-            echo "| Python compilation | $(status "$COMPILE") |"
-            echo "| Unit and integration tests | $(status "$UNIT_INTEGRATION") |"
-            echo "| Bootstrap CLI parsing | $(status "$BOOTSTRAP_CLI") |"
-            echo "| Program installer CLI parsing | $(status "$INSTALLER_CLI") |"
-            echo "| Fast-check aggregate | $(status "$CHECKS") |"
-            echo "| ${BASELINE:-baseline}: fresh installation and bootstrap | $(status "$VERSION_BASELINE") |"
-            echo "| ${BASELINE:-baseline}: programs and configuration | $(status "$VERSION_BASELINE") |"
-            echo "| ${BASELINE:-baseline}: fixed/floating themes and plugins | $(status "$VERSION_BASELINE") |"
-            echo "| ${BASELINE:-baseline}: restore and deblob safety | $(status "$VERSION_BASELINE") |"
-            echo "| ${BASELINE:-baseline}: doctor, menus and OSD | $(status "$VERSION_BASELINE") |"
-            echo "| ${BASELINE:-baseline}: idempotency and guest tests | $(status "$VERSION_BASELINE") |"
-            echo "| ${CANDIDATE:-candidate}: fresh compatibility | $(status "$FRESH_CANDIDATE") |"
-            echo "| ${BASELINE:-baseline} → ${CANDIDATE:-candidate}: configured upgrade | $(status "$UPGRADE_CANDIDATE") |"
-            echo "| WinApps: authenticated RemoteApp | $(status "$WINAPPS") |"
-            echo "| WinApps: Notepad window | $(status "$WINAPPS") |"
-            echo "| WinApps: Edge window | $(status "$WINAPPS") |"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: python3 tests/vm/report.py report-input

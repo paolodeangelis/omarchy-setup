@@ -287,18 +287,20 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn("mode: upgrade", workflow)
         self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", workflow)
         self.assertIn("needs.upgrade_candidate.result", workflow)
-        self.assertIn("Tested path:", workflow)
-        self.assertIn("# Omarchy compatibility report", workflow)
+        self.assertIn("python3 tests/vm/report.py report-input", workflow)
         self.assertIn("if: always()", workflow)
+        with tempfile.TemporaryDirectory() as directory:
+            report = module("report").render(Path(directory), {"BASELINE": "4.0.3", "CANDIDATE": "4.0.4"})
         for report_item in (
             "Pre-commit and Action syntax",
             "Unit and integration tests",
-            "fixed/floating themes and plugins",
-            "doctor, menus and OSD",
-            "WinApps: Notepad window",
-            "WinApps: Edge window",
+            "4.0.3",
+            "4.0.4",
+            "No acceptance records available",
+            "UNVERIFIED",
+            "FreeRDP/Notepad/Edge",
         ):
-            self.assertIn(report_item, workflow)
+            self.assertIn(report_item, report)
 
         workflows = "\n".join(
             path.read_text()

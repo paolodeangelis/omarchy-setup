@@ -208,7 +208,7 @@ def main():
             # Do not upload test-runs wholesale: it contains private SSH keys,
             # guest disks, firmware state, and potentially credentials.
             for item in (harness / "test-runs").rglob("*"):
-                if item.is_file() and item.suffix in {".png", ".mp4", ".json", ".log", ".txt"}:
+                if item.is_file() and item.suffix in {".png", ".mp4", ".json", ".jsonl", ".log", ".txt"}:
                     dest = artifacts / "guest" / item.relative_to(harness / "test-runs")
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, dest)
