@@ -385,9 +385,10 @@ class ThemeTests(unittest.TestCase):
         self.assertTrue(self.paths.spaces_agent_command.stat().st_mode & 0o100)
         self.assertTrue(
             codex["hooks"]["Stop"][0]["hooks"][0]["command"].endswith(
-                "claude-hook waiting"
+                "claude-hook done"
             )
         )
+        self.assertEqual(len(codex["hooks"]["Stop"]), 1)
         claude = __import__("json").loads(self.paths.claude_settings.read_text())
         self.assertTrue(
             claude["hooks"]["Notification"][0]["hooks"][0]["command"].endswith(

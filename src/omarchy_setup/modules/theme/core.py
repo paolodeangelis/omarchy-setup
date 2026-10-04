@@ -735,13 +735,12 @@ def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
     base = shlex.quote(str(reporter))
     wrapper = shlex.quote(str(paths.spaces_agent_command))
     codex = _read_json_object(paths.codex_hooks, "Codex hooks")
+    _remove_command_hook(codex, "Stop", f"{wrapper} {base} waiting")
     for event, state in (
         ("UserPromptSubmit", "working"),
         ("PostToolUse", "working"),
         ("PermissionRequest", "waiting"),
-        # Codex has no general Notification hook. A stopped turn needs the
-        # user's attention, whether it ended with a question or an answer.
-        ("Stop", "waiting"),
+        ("Stop", "done"),
         ("SessionEnd", "end"),
     ):
         legacy = f"{base} {state}"
