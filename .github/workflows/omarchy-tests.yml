@@ -8,13 +8,6 @@ on:
         description: Optional official stable release to test
         type: string
         default: ''
-      upgrade_from:
-        description: Reviewed older baseline for a one-time upgrade drill
-        type: choice
-        options:
-          - current
-          - '4.0.3'
-        default: current
 
 permissions:
   contents: read
@@ -90,8 +83,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE: ${{ inputs.candidate || '' }}
-          BASELINE: ${{ inputs.upgrade_from == '4.0.3' && '4.0.3' || '' }}
-        run: python3 tests/vm/resolve.py latest --candidate "$CANDIDATE" --baseline "$BASELINE" --output release.json
+        run: python3 tests/vm/resolve.py latest --candidate "$CANDIDATE" --output release.json
       - uses: actions/upload-artifact@v7
         with:
           name: release-detection

@@ -24,6 +24,7 @@ CARD_MARKER = "  // --- card ---------------------------------------------------
 UWSM_MARKER = "# Managed by omarchy-setup theme"
 SUPPORTED_KEYBOARD_PANEL_SHA256 = {
     "96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d",
+    "c8b3b0fd52d8a79469675e925ff851e1dd0588eb1eeb90bd4df004a4c7d72a0a",
 }
 SUPPORTED_PLUGIN_BAR_API_SHA256 = {
     "91964a42b92c58476a4f961df35148d4c94071344ef1a69eab1563d1496705a7",

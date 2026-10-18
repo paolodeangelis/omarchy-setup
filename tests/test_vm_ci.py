@@ -335,7 +335,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
         self.assertIn("name: Omarchy 4.0.4", workflow)
-        self.assertIn("upgrade_from:", workflow)
+        self.assertNotIn("upgrade_from:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("mode: pinned", workflow)
         self.assertIn("mode: latest", workflow)

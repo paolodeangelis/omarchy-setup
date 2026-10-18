@@ -5,16 +5,23 @@ import shutil
 
 
 SUPPORTED = {
-    "shell.qml": "4a4b7694e5b9e0bd952ce0efa2d6dc2cea44cdfa98cc2f442e40fe41cbc1beab",
-    "services/PluginShellApi.qml": "ff0cb5ec5fcdda0b21af447b11f07a24e065a3557796639364109aaa2ce5c763",
-    "plugins/notifications/Service.qml": "11665542e70df80ccd3c785a6143dee2daefd2082e4f75c740adc2c9947cf7c2",
+    "shell.qml": {
+        "4a4b7694e5b9e0bd952ce0efa2d6dc2cea44cdfa98cc2f442e40fe41cbc1beab",
+        "1c390bb1703a8372a7d3a614bc44513b6cc91eee21f4bd507198e8601310e617",
+    },
+    "services/PluginShellApi.qml": {
+        "ff0cb5ec5fcdda0b21af447b11f07a24e065a3557796639364109aaa2ce5c763"
+    },
+    "plugins/notifications/Service.qml": {
+        "11665542e70df80ccd3c785a6143dee2daefd2082e4f75c740adc2c9947cf7c2"
+    },
 }
 
 
 def validate_sources(shell: Path) -> None:
     for name, expected in SUPPORTED.items():
         source = shell / name
-        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
+        if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() not in expected:
             raise ValueError(f"unvalidated Omarchy host interface: {name}; keep the working shell")
 
 

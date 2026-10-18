@@ -95,7 +95,7 @@ class ThemeTests(unittest.TestCase):
             target = system / "shell" / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content)
-        supported = {name: __import__("hashlib").sha256(content.encode()).hexdigest()
+        supported = {name: {__import__("hashlib").sha256(content.encode()).hexdigest()}
                      for name, content in host_files.items()}
         for target, value in (
             ("omarchy_setup.modules.theme.host_integration.SUPPORTED", supported),
