@@ -26,7 +26,7 @@ checksum resolution failures fail the job; they never substitute an older ISO.
 Edit `releases.json` when deliberately advancing your workstation baseline.
 Review its checksum and the pinned official ISO harness commit together.
 
-The release watcher polls every six hours on the default branch and dispatches
+The release watcher polls monthly on the default branch and dispatches
 the main compatibility workflow. GitHub schedules can be delayed. Its cache prevents
 routine duplicates, but cache eviction or a partial dispatch can cause a repeat;
 it is not an exactly-once release webhook. Failed runs can be rerun manually.

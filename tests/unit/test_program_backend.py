@@ -10,7 +10,11 @@ from omarchy_setup.modules.programs import PROGRAMS, OmarchyProgramBackend, Prog
 from omarchy_setup.modules.programs.core import (
     MAMBA_BLOCK_END,
     MAMBA_BLOCK_START,
+    ZEN_BINDING_END,
+    ZEN_BINDING_START,
     _install_mamba_shell_block,
+    _install_zen_binding,
+    _remove_zen_binding,
 )
 
 
@@ -66,6 +70,77 @@ class ProgramBackendTests(unittest.TestCase):
                 )
                 self.assertEqual(syntax.returncode, 0, syntax.stderr)
 
+    def test_zen_binding_is_idempotent_preserves_user_content_and_is_removable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = ProgramPaths(
+                data_home=root / "data",
+                shell_rc=root / ".bashrc",
+                config_home=root / "config",
+            )
+            bindings = root / "config" / "hypr" / "bindings.lua"
+            bindings.parent.mkdir(parents=True)
+            bindings.write_text('-- personal\no.bind("SUPER + R", "Run", "wofi")\n')
+
+            _install_zen_binding(paths)
+            first = bindings.read_text()
+            _install_zen_binding(paths)
+
+            self.assertEqual(bindings.read_text(), first)
+            self.assertIn('-- personal', first)
+            self.assertIn(ZEN_BINDING_START, first)
+            self.assertIn('hl.unbind("SUPER + SHIFT + B")', first)
+            self.assertIn('zen-browser --blank-window about:newtab', first)
+
+            _remove_zen_binding(paths)
+            restored = bindings.read_text()
+            self.assertIn('-- personal', restored)
+            self.assertNotIn(ZEN_BINDING_START, restored)
+            self.assertNotIn(ZEN_BINDING_END, restored)
+
+    def test_zen_uninstall_refuses_to_remove_active_default_browser(self) -> None:
+        backend = OmarchyProgramBackend()
+        program = next(program for program in PROGRAMS if program.name == "zen")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = ProgramPaths(data_home=root / "data", shell_rc=root / ".bashrc")
+            with patch.object(
+                backend,
+                "_run",
+                return_value=subprocess.CompletedProcess(
+                    ("omarchy", "default", "browser"), 0, "zen\n", ""
+                ),
+            ):
+                with self.assertRaisesRegex(ProgramError, "default browser"):
+                    backend.uninstall(program, paths, quiet=True)
+
+    @patch("omarchy_setup.modules.programs.core.subprocess.run")
+    def test_package_uninstall_removes_only_declared_installed_packages(self, run) -> None:
+        backend = OmarchyProgramBackend()
+        program = next(program for program in PROGRAMS if program.name == "spotify")
+        paths = ProgramPaths(data_home=Path("/unused"), shell_rc=Path("/unused/.bashrc"))
+        run.return_value = subprocess.CompletedProcess(("pacman",), 0, "spotify\n", "")
+
+        with patch.object(backend, "_run") as backend_run:
+            backend.uninstall(program, paths, quiet=True)
+
+        backend_run.assert_called_once_with(
+            ("sudo", "pacman", "-Rns", "--noconfirm", "--", "spotify"),
+            capture=True,
+        )
+
+    def test_webapp_uninstall_uses_supported_omarchy_command(self) -> None:
+        backend = OmarchyProgramBackend()
+        program = next(program for program in PROGRAMS if program.name == "outlook")
+        paths = ProgramPaths(data_home=Path("/unused"), shell_rc=Path("/unused/.bashrc"))
+
+        with patch.object(backend, "_run") as backend_run:
+            backend.uninstall(program, paths, quiet=False)
+
+        backend_run.assert_called_once_with(
+            ("omarchy", "webapp", "remove", "Outlook"), capture=False
+        )
+
     def test_install_suppresses_omarchy_automatic_app_launch(self) -> None:
         backend = OmarchyProgramBackend()
         program = next(program for program in PROGRAMS if program.name == "spotify")
@@ -85,6 +160,78 @@ class ProgramBackendTests(unittest.TestCase):
             )
             with patch.object(backend, "_run", side_effect=inspect_run):
                 backend.install(program, paths, quiet=True)
+
+    def test_outlook_uses_supported_webapp_installer_and_launcher(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "outlook")
+
+        self.assertEqual(program.desktop_file, "Outlook.desktop")
+        self.assertEqual(program.install_command, (
+            "omarchy", "webapp", "install", "Outlook",
+            "https://outlook.office.com/mail/", "application-msoutlook",
+        ))
+        self.assertEqual(program.login_command, (
+            "omarchy", "launch", "webapp", "https://outlook.office.com/mail/",
+        ))
+
+    def test_zoom_uses_native_package_and_web_fallback_is_separate(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "zoom")
+        web = next(program for program in PROGRAMS if program.name == "zoom-web")
+
+        self.assertEqual(program.desktop_file, "Zoom.desktop")
+        self.assertEqual(program.packages, ("zoom",))
+        self.assertEqual(
+            program.install_command, ("omarchy", "pkg", "aur", "add", "zoom")
+        )
+        self.assertEqual(program.login_command, ("uwsm-app", "--", "zoom"))
+        self.assertEqual(program.kind, "zoom-native")
+
+        self.assertFalse(web.include_in_all)
+        self.assertEqual(web.desktop_file, "Zoom Web.desktop")
+        self.assertEqual(web.install_command, (
+            "omarchy", "webapp", "install", "Zoom Web",
+            "https://app.zoom.us/wc/home", "zoom",
+            "omarchy-webapp-handler-zoom %u",
+            "x-scheme-handler/zoommtg;x-scheme-handler/zoomus",
+        ))
+        self.assertEqual(web.login_command, (
+            "omarchy", "launch", "webapp", "https://app.zoom.us/wc/home",
+        ))
+
+    def test_native_zoom_preserves_web_launcher_and_becomes_protocol_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            system = root / "system-applications"
+            data = root / "data"
+            applications = data / "applications"
+            system.mkdir()
+            applications.mkdir(parents=True)
+            native = system / "Zoom.desktop"
+            native.write_text(
+                "[Desktop Entry]\nName=Zoom\nExec=/usr/bin/zoom %U\n"
+                "MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus\n"
+            )
+            stock_web = applications / "Zoom.desktop"
+            stock_web.write_text(
+                "[Desktop Entry]\nName=Zoom\n"
+                "Exec=omarchy-webapp-handler-zoom %u\n"
+            )
+            paths = ProgramPaths(data_home=data, shell_rc=root / ".bashrc")
+            backend = OmarchyProgramBackend(system_applications=system)
+            responses = (
+                subprocess.CompletedProcess(("update-desktop-database",), 0, "", ""),
+                subprocess.CompletedProcess(("xdg-mime", "default"), 0, "", ""),
+                subprocess.CompletedProcess(("xdg-mime", "query"), 0, "Zoom.desktop\n", ""),
+                subprocess.CompletedProcess(("xdg-mime", "default"), 0, "", ""),
+                subprocess.CompletedProcess(("xdg-mime", "query"), 0, "Zoom.desktop\n", ""),
+            )
+
+            with patch.object(backend, "_run", side_effect=responses):
+                backend._configure_zoom_native(paths)
+
+            self.assertEqual((applications / "Zoom.desktop").read_text(), native.read_text())
+            web_contents = (applications / "Zoom Web.desktop").read_text()
+            self.assertIn("Name=Zoom Web", web_contents)
+            self.assertIn("omarchy-webapp-handler-zoom", web_contents)
 
     def test_default_selection_is_verified(self) -> None:
         backend = OmarchyProgramBackend()

@@ -26,7 +26,14 @@ from omarchy_setup.modules.programs import (
     ProgramPaths,
     format_program_list,
     run_install,
+    run_uninstall,
     WinAppsError,
+)
+from omarchy_setup.modules.plugins import (
+    OmarchyPluginBackend,
+    PluginError,
+    PluginPaths,
+    run_plugins,
 )
 from omarchy_setup.modules.theme import (
     OmarchyThemeBackend,
@@ -146,6 +153,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="show plain stage messages instead of the terminal progress bar",
     )
 
+    uninstall = commands.add_parser(
+        "uninstall", help="remove one managed program while preserving user data"
+    )
+    uninstall.add_argument("target", metavar="program", help="program name to remove")
+    uninstall.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="accept the uninstall plan; safety checks still apply",
+    )
+    uninstall.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="inspect and plan without removing anything",
+    )
+    uninstall.add_argument("--quiet", action="store_true", help="suppress normal output")
+    uninstall.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="show plain stage messages instead of the terminal progress bar",
+    )
+
+    plugin = commands.add_parser(
+        "plugin", help="manage third-party Omarchy shell plugins and their bar placement"
+    )
+    plugin_actions = plugin.add_subparsers(dest="plugin_action", required=True)
+    plugin_apply = plugin_actions.add_parser(
+        "apply", help="install, validate, enable, and position all managed plugins"
+    )
+    plugin_apply.add_argument(
+        "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
+        help="accept the plugin reconciliation plan; safety checks still apply",
+    )
+    plugin_apply.add_argument("--dry-run", action="store_true")
+    plugin_apply.add_argument("--no-progress", action="store_true")
+
+    plugin_actions.add_parser("status", help="show managed plugin and placement state")
+
+    plugin_upgrade = plugin_actions.add_parser(
+        "upgrade", help="update managed plugins through Omarchy, then restore placement"
+    )
+    plugin_upgrade.add_argument("target", nargs="?", default="all", help="plugin ID or 'all'")
+    plugin_upgrade.add_argument(
+        "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
+        help="upgrade without per-plugin confirmation; validation still applies",
+    )
+    plugin_upgrade.add_argument("--dry-run", action="store_true")
+    plugin_upgrade.add_argument("--no-progress", action="store_true")
+
     theme = commands.add_parser("theme", help="install olio-su-silicio and select its bar style")
     theme.add_argument(
         "action",
@@ -232,6 +289,31 @@ def main(
                 progress=not args.no_progress,
                 install_only=args.install_only,
             )
+        if args.command == "uninstall":
+            return run_uninstall(
+                args.target,
+                paths=ProgramPaths.for_user(),
+                backend=backend or OmarchyProgramBackend(),
+                assume_yes=args.yes,
+                dry_run=args.dry_run,
+                quiet=args.quiet,
+                stdin=stdin,
+                stdout=stdout,
+                progress=not args.no_progress,
+            )
+        if args.command == "plugin":
+            paths = PluginPaths.for_user()
+            return run_plugins(
+                args.plugin_action,
+                getattr(args, "target", "all"),
+                paths=paths,
+                backend=backend or OmarchyPluginBackend(paths),
+                assume_yes=args.yes,
+                dry_run=getattr(args, "dry_run", False),
+                stdin=stdin,
+                stdout=stdout,
+                progress=not getattr(args, "no_progress", False),
+            )
         if args.command == "theme":
             return run_theme(
                 args.action,
@@ -243,7 +325,7 @@ def main(
                 stdout=stdout,
                 progress=not args.no_progress,
             )
-    except (DeblobError, InitError, ProgramError, ThemeError, WinAppsError) as error:
+    except (DeblobError, InitError, PluginError, ProgramError, ThemeError, WinAppsError) as error:
         print(f"Error: {error}", file=stderr)
         return 2
 

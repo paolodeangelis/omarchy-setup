@@ -20,12 +20,6 @@ from omarchy_setup.modules.theme import host_integration
 
 
 THEME_NAME = "olio-su-silicio"
-OMASTORM_ID = "com.omastorm.radar"
-OMASTORM_URL = "https://github.com/wesleygrimes/omastorm.git"
-NOTIFICATION_CENTER_ID = "jankeesvw.notification-center"
-NOTIFICATION_CENTER_URL = "https://github.com/jankeesvw/omarchy-notification-center.git"
-SPACES_ID = "tornikegomareli.spaces"
-SPACES_URL = "https://github.com/tornikegomareli/omarchy-spaces.git"
 CARD_MARKER = "  // --- card ----------------------------------------------------------------"
 UWSM_MARKER = "# Managed by omarchy-setup theme"
 SUPPORTED_KEYBOARD_PANEL_SHA256 = {
@@ -167,14 +161,6 @@ class ThemePaths:
         return self.repo_root / "themes" / THEME_NAME / "bin" / "omarchy-launch-shell"
 
     @property
-    def spaces_agent_template(self) -> Path:
-        return self.repo_root / "themes" / THEME_NAME / "bin" / "omarchy-spaces-agent"
-
-    @property
-    def spaces_agent_command(self) -> Path:
-        return self.state_root / "bin" / "omarchy-spaces-agent"
-
-    @property
     def theme_assets(self) -> Path:
         return self.repo_root / "themes" / THEME_NAME / "omarchy-theme"
 
@@ -205,14 +191,6 @@ class ThemePaths:
     @property
     def shell_config(self) -> Path:
         return self.home / ".config" / "omarchy" / "shell.json"
-
-    @property
-    def codex_hooks(self) -> Path:
-        return self.home / ".codex" / "hooks.json"
-
-    @property
-    def claude_settings(self) -> Path:
-        return self.home / ".claude" / "settings.json"
 
     @property
     def current_theme_name(self) -> Path:
@@ -264,8 +242,6 @@ class ThemeBackend(Protocol):
 
     def validate_hyprland(self) -> None: ...
 
-    def ensure_companion_plugins(self, paths: ThemePaths) -> None: ...
-
 
 def _run(command: tuple[str, ...], *, environment: dict[str, str] | None = None) -> str:
     try:
@@ -284,20 +260,6 @@ def _run(command: tuple[str, ...], *, environment: dict[str, str] | None = None)
             message = str(error)
         raise ThemeError(f"{' '.join(command)}: {message}") from error
     return result.stdout.strip()
-
-
-def _run_plugin_command(
-    command: tuple[str, ...], *, environment: dict[str, str], attempts: int = 4
-) -> str:
-    """Retry only transient shell-startup failures from Omarchy plugin IPC."""
-    for attempt in range(attempts):
-        try:
-            return _run(command, environment=environment)
-        except ThemeError as error:
-            if "omarchy-shell is not responding" not in str(error) or attempt == attempts - 1:
-                raise
-            time.sleep(1.5 * (attempt + 1))
-    raise AssertionError("unreachable")
 
 
 class OmarchyThemeBackend:
@@ -381,39 +343,6 @@ class OmarchyThemeBackend:
 
     def validate_bar_plugin(self, source: Path) -> None:
         _run(("omarchy", "plugin", "validate", str(source)))
-
-    def ensure_companion_plugins(self, paths: ThemePaths) -> None:
-        """Install the theme's managed bar widgets once, then keep placement stable."""
-        active = self.active_omarchy_path() or paths.system_omarchy
-        environment = os.environ.copy()
-        environment["OMARCHY_PATH"] = str(active)
-        environment["QML2_IMPORT_PATH"] = str(active / "shell")
-        plugins_root = paths.home / ".config" / "omarchy" / "plugins"
-        companions = (
-            (SPACES_ID, SPACES_URL, ("--section", "left", "--after", "omarchy.menu")),
-            (OMASTORM_ID, OMASTORM_URL, ("--section", "center", "--after", "omarchy.weather")),
-            (NOTIFICATION_CENTER_ID, NOTIFICATION_CENTER_URL, ("--section", "right", "--after", "omarchy.power")),
-        )
-        for plugin_id, url, placement in companions:
-            manifest = plugins_root / plugin_id / "manifest.json"
-            if not manifest.is_file():
-                _run_plugin_command(
-                    ("omarchy", "plugin", "add", url, "--enable", "--yes"),
-                    environment=environment,
-                )
-            _run_plugin_command(
-                ("omarchy", "plugin", "enable", plugin_id, *placement),
-                environment=environment,
-            )
-
-        _ensure_spaces_agent_hooks(paths)
-
-        # Do this only after Spaces is installed and enabled. If any earlier
-        # step fails, Omarchy's built-in workspace switcher remains available.
-        _run_plugin_command(
-            ("omarchy", "plugin", "disable", "omarchy.workspaces"),
-            environment=environment,
-        )
 
     def set_theme(self, name: str, *, preserve_background: bool = False) -> None:
         environment = os.environ.copy()
@@ -659,148 +588,6 @@ def _write_atomic(path: Path, content: str) -> None:
     temporary = path.with_name(path.name + ".next")
     temporary.write_text(content)
     os.replace(temporary, path)
-
-
-def _read_json_object(path: Path, label: str) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise ThemeError(f"invalid {label} configuration: {path}") from error
-    if not isinstance(value, dict):
-        raise ThemeError(f"{label} configuration must be an object: {path}")
-    return value
-
-
-def _append_command_hook(
-    config: dict[str, object], event: str, command: str, *, timeout: int = 3,
-    asynchronous: bool = True,
-) -> None:
-    hooks = config.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        raise ThemeError("agent hooks configuration must be an object")
-    groups = hooks.setdefault(event, [])
-    if not isinstance(groups, list):
-        raise ThemeError(f"agent hook event {event} must be a list")
-
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        handlers = group.get("hooks", [])
-        if isinstance(handlers, list):
-            for handler in handlers:
-                if (
-                    isinstance(handler, dict)
-                    and handler.get("type") == "command"
-                    and handler.get("command") == command
-                ):
-                    # Reconcile existing entries too, so re-running theme
-                    # setup migrates previously installed async hooks.
-                    handler["async"] = asynchronous
-                    handler["timeout"] = timeout
-                    return
-
-    groups.append(
-        {
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": command,
-                    "async": asynchronous,
-                    "timeout": timeout,
-                }
-            ]
-        }
-    )
-
-
-def _remove_command_hook(config: dict[str, object], event: str, command: str) -> None:
-    hooks = config.get("hooks")
-    if not isinstance(hooks, dict):
-        return
-    groups = hooks.get(event)
-    if not isinstance(groups, list):
-        return
-
-    kept_groups: list[object] = []
-    for group in groups:
-        if not isinstance(group, dict):
-            kept_groups.append(group)
-            continue
-        handlers = group.get("hooks")
-        if not isinstance(handlers, list):
-            kept_groups.append(group)
-            continue
-        kept_handlers = [
-            handler
-            for handler in handlers
-            if not (
-                isinstance(handler, dict)
-                and handler.get("type") == "command"
-                and handler.get("command") == command
-            )
-        ]
-        if kept_handlers:
-            next_group = dict(group)
-            next_group["hooks"] = kept_handlers
-            kept_groups.append(next_group)
-    hooks[event] = kept_groups
-
-
-def _ensure_spaces_agent_hooks(paths: ThemePaths) -> None:
-    reporter = (
-        paths.home
-        / ".config"
-        / "omarchy"
-        / "plugins"
-        / SPACES_ID
-        / "hooks"
-        / "claude-hook"
-    )
-    if not reporter.is_file():
-        raise ThemeError(f"Spaces agent integration is missing: {reporter}")
-    if not paths.spaces_agent_template.is_file():
-        raise ThemeError(f"Spaces agent wrapper is missing: {paths.spaces_agent_template}")
-
-    _write_atomic(paths.spaces_agent_command, paths.spaces_agent_template.read_text())
-    paths.spaces_agent_command.chmod(0o755)
-
-    base = shlex.quote(str(reporter))
-    wrapper = shlex.quote(str(paths.spaces_agent_command))
-    codex = _read_json_object(paths.codex_hooks, "Codex hooks")
-    for event, state in (
-        ("UserPromptSubmit", "working"),
-        ("PostToolUse", "working"),
-        ("PermissionRequest", "waiting"),
-        ("Stop", "done"),
-        ("Interrupt", "end"),
-        ("SessionEnd", "end"),
-    ):
-        legacy = f"{base} {state}"
-        old_command = f"{wrapper} {base} {state}"
-        command = f"{wrapper} {state}"
-        _remove_command_hook(codex, event, legacy)
-        _remove_command_hook(codex, event, old_command)
-        _append_command_hook(codex, event, command, asynchronous=False)
-
-    claude = _read_json_object(paths.claude_settings, "Claude")
-    for event, state in (
-        ("UserPromptSubmit", "working"),
-        ("PostToolUse", "working"),
-        ("Notification", "waiting"),
-        ("Stop", "done"),
-        ("SessionEnd", "end"),
-    ):
-        legacy = f"{base} {state}"
-        old_command = f"{wrapper} {base} {state}"
-        command = f"{wrapper} {state}"
-        _remove_command_hook(claude, event, legacy)
-        _remove_command_hook(claude, event, old_command)
-        _append_command_hook(claude, event, command, asynchronous=False)
-
-    _write_atomic(paths.codex_hooks, json.dumps(codex, indent=2, ensure_ascii=False) + "\n")
-    _write_atomic(paths.claude_settings, json.dumps(claude, indent=2, ensure_ascii=False) + "\n")
 
 
 def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> None:
@@ -1149,9 +936,7 @@ def configure_theme(
         if theme_changed and overlay_result == "already applied":
             backend.restart_shell(paths.overlay_root)
             overlay_result = "restarted"
-        stage(5, "Checking companion bar plugins")
-        backend.ensure_companion_plugins(paths)
-        stage(6, "Reloading and validating Hyprland")
+        stage(5, "Reloading and validating Hyprland")
         backend.validate_hyprland()
 
         state = json.loads(paths.state_file.read_text()) if paths.state_file.is_file() else {}
@@ -1167,7 +952,7 @@ def configure_theme(
         )
         _write_atomic(paths.state_file, json.dumps(state, indent=2, sort_keys=True) + "\n")
         _retire_legacy_bar_link(paths)
-        stage(7, "Theme setup verified")
+        stage(6, "Theme setup verified")
         return f"{style} bar configured; shell {overlay_result}"
     except Exception:
         try:
@@ -1220,7 +1005,7 @@ def run_theme(
             print("Cancelled.", file=stdout)
             return 1
     if normalized in {"bar-fixed", "bar-floating"}:
-        display = ProgressDisplay(stdout, enabled=progress, quiet=False, total=7)
+        display = ProgressDisplay(stdout, enabled=progress, quiet=False, total=6)
         result = configure_theme(
             paths,
             backend,

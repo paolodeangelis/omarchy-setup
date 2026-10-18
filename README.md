@@ -44,8 +44,13 @@ omarchy-setup deblob
 
 omarchy-setup install <name>
 omarchy-setup install all
+omarchy-setup uninstall <name>
 omarchy-setup programs list
 omarchy-setup programs status
+
+omarchy-setup plugin apply
+omarchy-setup plugin status
+omarchy-setup plugin upgrade [all|plugin-id]
 
 omarchy-setup dotfiles
 omarchy-setup theme
@@ -129,10 +134,37 @@ available Omarchy default:
 ```bash
 omarchy-setup install zen --login --default
 omarchy-setup install dropbox --login
+omarchy-setup install outlook --login
+omarchy-setup install zoom --login
+omarchy-setup install zoom-web --login  # optional browser-based fallback
 ```
 
+Installing Zen also replaces Omarchy's `Super+Shift+B` binding with a managed
+user override that opens an unsynced blank Zen window (`about:newtab`) instead
+of copying the active window's workspace tabs. `Super+Shift+Alt+B` remains Omarchy's private-browser
+shortcut. The override is marked in `~/.config/hypr/bindings.lua`, is
+idempotent, and is removed with Zen's managed integration.
+
+Remove one managed application with:
+
+```bash
+omarchy-setup uninstall spotify
+omarchy-setup uninstall zen
+```
+
+Removal requires an explicit program name and preserves application profiles
+and account data. There is intentionally no `uninstall all`. Miniforge and
+WinApps removal remain manual because their trees may contain user environments
+or a Windows guest disk. Zen removal also refuses to proceed while Zen is the
+active default browser; select another default first.
+
 Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
-`spotify`, `whatsapp`, `telegram`, and WinApps. `mamba` installs a pinned,
+`spotify`, native Zoom, the Outlook and WhatsApp web apps, `telegram`, and
+WinApps. Native Zoom is included in `install all`; its launcher becomes the
+verified handler for `zoommtg://` and `zoomus://` links. The separate
+`zoom-web` protocol is an optional fallback and is not included in `all`.
+The native client is installed from AUR through Omarchy's supported helper.
+`mamba` installs a pinned,
 checksum-verified Miniforge release under
 `~/.local/share/omarchy-setup/miniforge3`, appends one marked integration block
 to `~/.bashrc`, and leaves the base environment inactive. It does not run
@@ -151,6 +183,13 @@ by the Omarchy prompt. `install all -y` includes mamba and skips every target
 already detected as installed. Login is always interactive and credentials
 remain with the application. At present only Zen has an applicable Omarchy
 default.
+
+The Outlook launcher uses Omarchy's supported Chromium app-mode wrapper. During
+first login, allow browser notifications and enable Mail and Calendar under
+Outlook's **Settings > General > Notifications**. These notifications flow
+through Omarchy's normal notification service while Outlook is open; the web
+app protocol does not configure accounts, store credentials, or replace a
+future native mail client.
 
 WinApps is prepared separately because an unattended `all` run cannot safely
 invent Windows credentials or complete licensed application onboarding:
@@ -223,17 +262,66 @@ the popup. Matching translucent alpha values match their RGBA configuration,
 but the visible result can differ because each surface blends with different
 content behind it. Use alpha `1.0` for an exactly constant joined colour.
 
-Theme activation also verifies the companion Omarchy plugins. Spaces replaces
-the built-in workspace switcher after Menu, Omastorm radar is placed after
-Weather in the center group, and Notification Center is placed after Power at
-the far right. Missing plugins are installed through Omarchy's plugin command;
-re-running the theme command keeps their placement idempotent. Spaces is
-enabled before `omarchy.workspaces` is disabled, so an installation failure
-leaves the stock switcher available. Restore it manually with:
+Third-party shell plugins are independent from the theme and are reconciled with:
+
+```bash
+omarchy-setup plugin apply -y
+omarchy-setup plugin status
+```
+
+`plugins/plugins.toml` is the editable source of truth
+for plugin IDs, Git URLs, bar sections, ordering, and explicit replacements.
+Spaces follows Menu and replaces the built-in workspace switcher only after
+Spaces is installed and positioned. The built-in Media widget follows Spaces
+and provides MPRIS controls for Spotify and other players without cloning
+Omarchy-owned code. Weather Radar follows Weather in the center
+group; after its manifest and placement are verified, the old Omastorm widget is
+disabled but kept installed for a quick rollback. Notification Center follows
+Power at the far right. Battery Insights follows the tray and does not disable
+the built-in Power widget. Hyprmoncfg follows Audio and replaces the built-in
+Monitor widget only after the utility has installed and verified its
+`hyprmoncfg-bin` backend. Change `section` and `after`, then rerun `plugin apply` to control
+final placement. Add an ID to `replaces` only when the new plugin should disable
+it after successful installation and placement. Optional `requires` commands,
+`aur_packages`, and `user_services` declare the executable, package, and daemon
+that must be verified before any replacement.
+
+On a fresh machine, one apply installs the Hyprmoncfg backend and starts its
+daemon first, then installs the panel, and finally disables `omarchy.monitor`:
+
+```bash
+omarchy-setup plugin apply -y
+```
+
+The AUR package installation remains visible and may request sudo in an
+interactive terminal. If it fails, plugin installation stops and the stock
+Monitor widget remains enabled.
+Restore the stock path with `hyprmoncfg unmanage`, enable `omarchy.monitor`, and
+disable `crmne.hyprmoncfg`.
+
+Plugin source is not silently updated by `apply`. Upgrade all managed plugins,
+or one selected plugin, through Omarchy's validation-aware updater with:
+
+```bash
+omarchy-setup plugin upgrade all -y
+omarchy-setup plugin upgrade aabulkhairov.battery-insights -y
+```
+
+The upgrade command reapplies the declared placement and replacement state.
+Restore the stock workspace switcher manually with:
 
 ```bash
 omarchy plugin enable omarchy.workspaces --section left --after omarchy.menu
 omarchy plugin disable tornikegomareli.spaces
+```
+
+To roll Weather Radar back to Omastorm, enable the retained widget beside
+Weather, disable Weather Radar, then restart the shell:
+
+```bash
+omarchy plugin enable com.omastorm.radar --section center --after omarchy.weather
+omarchy plugin disable eduardodallecort.weather-radar
+omarchy restart shell
 ```
 
 Notification Center archives notifications; it does not replace Omarchy's
@@ -323,7 +411,7 @@ Every pushed commit runs one compatibility workflow containing fast project
 checks, a fresh Omarchy 4.0.4 VM, and the WinApps basic compatibility test. If
 the newest official stable release is newer than 4.0.4, the same run adds both
 a fresh candidate VM and a configured 4.0.4-to-candidate upgrade VM. A separate
-six-hour release check dispatches this complete workflow once for each newly
+monthly release check dispatches this complete workflow once for each newly
 detected stable version; later manual runs or commits can retest a failure.
 The VM jobs use the pinned official ISO harness, verified ISO checksums, and an
 ephemeral GitHub-hosted KVM runner. WinApps uses a separate direct-KVM job

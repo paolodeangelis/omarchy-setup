@@ -1,0 +1,56 @@
+# Omarchy shell plugins managed by `omarchy-setup plugin`.
+#
+# `section` and `after` control the final bar position. Re-running
+# `omarchy-setup plugin apply` restores this declared order.
+#
+# `replaces` lists widgets to disable only after the new plugin is installed,
+# validated, enabled, and positioned. Replaced third-party source is retained
+# for rollback.
+
+[[plugin]]
+id = "tornikegomareli.spaces"
+url = "https://github.com/tornikegomareli/omarchy-spaces.git"
+section = "left"
+after = "omarchy.menu"
+replaces = ["omarchy.workspaces"]
+
+[[plugin]]
+id = "omarchy.media"
+builtin = true
+section = "left"
+after = "tornikegomareli.spaces"
+
+[[plugin]]
+id = "eduardodallecort.weather-radar"
+url = "https://github.com/eduardodallecort/omarchy-weather-radar.git"
+section = "center"
+after = "omarchy.weather"
+replaces = ["com.omastorm.radar"]
+
+[[plugin]]
+id = "jankeesvw.notification-center"
+url = "https://github.com/jankeesvw/omarchy-notification-center.git"
+section = "right"
+after = "omarchy.power"
+
+[[plugin]]
+id = "aabulkhairov.battery-insights"
+url = "https://github.com/aabulkhairov/omarchy-battery-insights.git"
+section = "right"
+after = "omarchy.tray"
+
+# Battery Insights intentionally does not replace `omarchy.power`.
+
+[[plugin]]
+id = "crmne.hyprmoncfg"
+url = "https://github.com/crmne/omarchy-hyprmoncfg.git"
+section = "right"
+after = "omarchy.audio"
+replaces = ["omarchy.monitor"]
+requires = ["hyprmoncfg"]
+aur_packages = ["hyprmoncfg-bin"]
+user_services = ["hyprmoncfgd.service"]
+
+# Install and verify the backend and daemon before enabling this replacement.
+# An existing source-built `hyprmoncfg` also satisfies `requires` and avoids
+# the binary AUR package.

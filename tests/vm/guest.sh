@@ -114,6 +114,17 @@ agent_hooks_configured() {
   printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" waiting
   printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" end
 }
+zoom_native_configured() {
+  local native="$HOME/.local/share/applications/Zoom.desktop"
+  local web="$HOME/.local/share/applications/Zoom Web.desktop"
+  pacman -Q zoom >/dev/null
+  [[ -f $native && -f $web ]]
+  rg -q '^Exec=.*zoom' "$native"
+  ! rg -q 'omarchy-webapp-handler-zoom' "$native"
+  rg -q 'omarchy-webapp-handler-zoom' "$web"
+  [[ $(xdg-mime query default x-scheme-handler/zoommtg) == Zoom.desktop ]]
+  [[ $(xdg-mime query default x-scheme-handler/zoomus) == Zoom.desktop ]]
+}
 update_system() {
   timeout --kill-after=30s 2400 "$STATE_ROOT/environment/bin/python" \
     "$SETUP_ROOT/tests/vm/update.py" </dev/null 2>&1 | tee /tmp/omarchy-update.log
@@ -135,11 +146,14 @@ if [[ $PHASE == initial ]]; then
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
   step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
+  step 'Native Zoom integration' zoom_native_configured
   step 'WinApps preparation plan only' "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-before-repeat.txt"
   step 'Repeat program installation' "$LAUNCHER" install all -y -d --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
   step 'Program package idempotency' cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
+  step 'Managed plugins' "$LAUNCHER" plugin apply -y --no-progress
+  step 'Managed plugin status' "$LAUNCHER" plugin status
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
@@ -177,6 +191,8 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   UPSTREAM_TESTS="$UPSTREAM_TESTS/candidate/test"
   authorize
   step 'Desktop after reboot before reapply' checks after-upgrade-before-reapply
+  step 'Managed plugins after upgrade' "$LAUNCHER" plugin apply -y --no-progress
+  step 'Managed plugin status after upgrade' "$LAUNCHER" plugin status
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
@@ -197,6 +213,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
   step 'Post-upgrade program installation' "$LAUNCHER" install all -y --no-progress
+  step 'Native Zoom integration after upgrade' zoom_native_configured
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-before-repeat.txt"
   step 'Repeat program installation' "$LAUNCHER" install all -y --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-after-repeat.txt"

@@ -155,6 +155,12 @@ Planned top-level interface:
 
 `omarchy-setup programs status`
 
+`omarchy-setup plugin apply`
+
+`omarchy-setup plugin status`
+
+`omarchy-setup plugin upgrade [all|plugin-id]`
+
 `omarchy-setup dotfiles`
 
 `omarchy-setup theme`
@@ -209,6 +215,16 @@ Account credentials must never be automated by storing secrets in this repositor
 `--install-only` skips configuration and account onboarding that require personal or GUI interaction.
 
 For complicated programs such as WinApps, first establish and understand a working manual setup. Then encode only the reproducible parts.
+
+## Plugins
+
+Third-party Omarchy shell plugins live behind `omarchy-setup plugin` and are
+independent from theme activation. Keep their desired sources, placement, and
+explicit replacements in `plugins/plugins.toml`.
+
+Use Omarchy's supported plugin commands for installation, validation, enable,
+disable, and update. A replacement must be working and positioned before its
+predecessor is disabled; retain third-party predecessor source for rollback.
 
 ## Dotfiles
 

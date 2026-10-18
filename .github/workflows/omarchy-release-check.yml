@@ -2,7 +2,8 @@ name: Omarchy release check
 
 on:
   schedule:
-    - cron: '19 */6 * * *'
+    # First day of each month at 06:19 UTC; workflow_dispatch remains available.
+    - cron: '19 6 1 * *'
   workflow_dispatch:
 
 permissions:

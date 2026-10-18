@@ -71,6 +71,7 @@ class Program:
     description: str
     packages: tuple[str, ...]
     install_command: tuple[str, ...]
+    uninstall_command: tuple[str, ...] | None = None
     login_command: tuple[str, ...] | None = None
     default_command: tuple[str, ...] | None = None
     desktop_file: str | None = None
@@ -137,6 +138,7 @@ PROGRAMS = (
         login_command=("uwsm-app", "--", "zen-browser"),
         default_command=("omarchy", "default", "browser", "zen"),
         aliases=("zen-browser",),
+        kind="zen",
     ),
     Program(
         name="1password",
@@ -170,6 +172,64 @@ PROGRAMS = (
         login_command=("omarchy", "launch", "spotify"),
     ),
     Program(
+        name="outlook",
+        label="Outlook",
+        description="Install Outlook on the web as an Omarchy application.",
+        packages=(),
+        install_command=(
+            "omarchy",
+            "webapp",
+            "install",
+            "Outlook",
+            "https://outlook.office.com/mail/",
+            "application-msoutlook",
+        ),
+        login_command=(
+            "omarchy",
+            "launch",
+            "webapp",
+            "https://outlook.office.com/mail/",
+        ),
+        desktop_file="Outlook.desktop",
+        uninstall_command=("omarchy", "webapp", "remove", "Outlook"),
+        aliases=("outlook-web",),
+    ),
+    Program(
+        name="zoom",
+        label="Zoom",
+        description="Install the native Zoom client and handle Zoom meeting links.",
+        packages=("zoom",),
+        install_command=("omarchy", "pkg", "aur", "add", "zoom"),
+        login_command=("uwsm-app", "--", "zoom"),
+        desktop_file="Zoom.desktop",
+        kind="zoom-native",
+    ),
+    Program(
+        name="zoom-web",
+        label="Zoom Web",
+        description="Install Zoom's web client as an optional Omarchy application.",
+        packages=(),
+        install_command=(
+            "omarchy",
+            "webapp",
+            "install",
+            "Zoom Web",
+            "https://app.zoom.us/wc/home",
+            "zoom",
+            "omarchy-webapp-handler-zoom %u",
+            "x-scheme-handler/zoommtg;x-scheme-handler/zoomus",
+        ),
+        login_command=(
+            "omarchy",
+            "launch",
+            "webapp",
+            "https://app.zoom.us/wc/home",
+        ),
+        desktop_file="Zoom Web.desktop",
+        uninstall_command=("omarchy", "webapp", "remove", "Zoom Web"),
+        include_in_all=False,
+    ),
+    Program(
         name="whatsapp",
         label="WhatsApp",
         description="Install WhatsApp as an Omarchy web application.",
@@ -184,6 +244,7 @@ PROGRAMS = (
         ),
         login_command=("omarchy", "launch", "webapp", "https://web.whatsapp.com/"),
         desktop_file="WhatsApp.desktop",
+        uninstall_command=("omarchy", "webapp", "remove", "WhatsApp"),
         aliases=("whapp",),
     ),
     Program(
@@ -206,12 +267,19 @@ class Backend(Protocol):
 
     def install(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None: ...
 
+    def configure(self, program: Program, paths: ProgramPaths) -> None: ...
+
+    def uninstall(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None: ...
+
     def set_default(self, program: Program) -> None: ...
 
     def launch_login(self, program: Program) -> None: ...
 
 
 class OmarchyProgramBackend:
+    def __init__(self, system_applications: Path = Path("/usr/share/applications")):
+        self.system_applications = system_applications
+
     def _run(
         self,
         command: Sequence[str],
@@ -248,6 +316,8 @@ class OmarchyProgramBackend:
             return (paths.mamba_root / "bin" / "mamba").is_file()
         if program.kind == "winapps":
             return WinAppsInstaller(WinAppsPaths.from_program_paths(paths)).is_prepared()
+        if program.kind == "zoom-native":
+            return self._zoom_native_is_configured(paths)
         if program.packages:
             result = subprocess.run(
                 ("pacman", "-Q", "--", *program.packages),
@@ -303,6 +373,156 @@ class OmarchyProgramBackend:
             environment = os.environ.copy()
             environment["PATH"] = f"{directory}:{environment.get('PATH', os.defpath)}"
             self._run(program.install_command, environment=environment, capture=quiet)
+        if program.kind == "zoom-native":
+            self._configure_zoom_native(paths)
+
+    def configure(self, program: Program, paths: ProgramPaths) -> None:
+        if program.kind == "zen":
+            _install_zen_binding(paths)
+
+    def uninstall(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
+        if program.kind in {"mamba", "winapps"}:
+            raise ProgramError(
+                f"{program.label} removal is not automated because it may contain user data"
+            )
+        if program.kind == "zen":
+            selected = self._run(("omarchy", "default", "browser")).stdout.strip()
+            if selected == "zen":
+                raise ProgramError(
+                    "Zen is the default browser; select another default before uninstalling it"
+                )
+
+        if program.uninstall_command is not None:
+            self._run(program.uninstall_command, capture=quiet)
+        elif program.packages:
+            installed = tuple(
+                package
+                for package in program.packages
+                if subprocess.run(
+                    ("pacman", "-Q", "--", package),
+                    text=True,
+                    capture_output=True,
+                ).returncode
+                == 0
+            )
+            if installed:
+                self._run(
+                    ("sudo", "pacman", "-Rns", "--noconfirm", "--", *installed),
+                    capture=quiet,
+                )
+        else:
+            raise ProgramError(f"{program.label} does not define a safe uninstall method")
+
+        if program.kind == "zen":
+            _remove_zen_binding(paths)
+        elif program.kind == "zoom-native":
+            self._remove_zoom_native(paths)
+
+    def _native_zoom_desktop(self) -> Path | None:
+        preferred = self.system_applications / "Zoom.desktop"
+        candidates = [preferred]
+        candidates.extend(
+            path
+            for path in sorted(self.system_applications.glob("*.desktop"))
+            if "zoom" in path.name.casefold() and path != preferred
+        )
+        for candidate in candidates:
+            try:
+                contents = candidate.read_text()
+            except (FileNotFoundError, OSError):
+                continue
+            exec_lines = (
+                line for line in contents.splitlines() if line.startswith("Exec=")
+            )
+            if any(
+                "zoom" in line.casefold()
+                and "omarchy-webapp-handler-zoom" not in line
+                for line in exec_lines
+            ):
+                return candidate
+        return None
+
+    @staticmethod
+    def _is_native_zoom_desktop(path: Path) -> bool:
+        try:
+            contents = path.read_text()
+        except (FileNotFoundError, OSError):
+            return False
+        return any(
+            "zoom" in line.casefold()
+            and "omarchy-webapp-handler-zoom" not in line
+            for line in contents.splitlines()
+            if line.startswith("Exec=")
+        )
+
+    def _zoom_native_is_configured(self, paths: ProgramPaths) -> bool:
+        package = subprocess.run(
+            ("pacman", "-Q", "--", "zoom"),
+            text=True,
+            capture_output=True,
+        )
+        local_desktop = paths.data_home / "applications" / "Zoom.desktop"
+        if package.returncode != 0 or not self._is_native_zoom_desktop(local_desktop):
+            return False
+        for scheme in ("zoommtg", "zoomus"):
+            selected = subprocess.run(
+                ("xdg-mime", "query", "default", f"x-scheme-handler/{scheme}"),
+                text=True,
+                capture_output=True,
+            )
+            if selected.returncode != 0 or selected.stdout.strip() != "Zoom.desktop":
+                return False
+        return True
+
+    def _configure_zoom_native(self, paths: ProgramPaths) -> None:
+        native_desktop = self._native_zoom_desktop()
+        if native_desktop is None:
+            raise ProgramError("native Zoom installed without a desktop launcher")
+
+        applications = paths.data_home / "applications"
+        applications.mkdir(parents=True, exist_ok=True)
+        local_desktop = applications / "Zoom.desktop"
+        web_desktop = applications / "Zoom Web.desktop"
+        if local_desktop.exists() and not self._is_native_zoom_desktop(local_desktop):
+            contents = local_desktop.read_text()
+            if "omarchy-webapp-handler-zoom" not in contents:
+                raise ProgramError(
+                    f"refusing to overwrite an unrecognized launcher: {local_desktop}"
+                )
+            if not web_desktop.exists():
+                web_desktop.write_text(
+                    contents.replace("Name=Zoom\n", "Name=Zoom Web\n", 1)
+                )
+                shutil.copymode(local_desktop, web_desktop)
+
+        shutil.copy2(native_desktop, local_desktop)
+        self._run(("update-desktop-database", str(applications)))
+        for scheme in ("zoommtg", "zoomus"):
+            mime = f"x-scheme-handler/{scheme}"
+            self._run(("xdg-mime", "default", "Zoom.desktop", mime))
+            selected = self._run(("xdg-mime", "query", "default", mime)).stdout.strip()
+            if selected != "Zoom.desktop":
+                raise ProgramError(
+                    f"native Zoom could not be registered for {scheme} links"
+                )
+
+    def _remove_zoom_native(self, paths: ProgramPaths) -> None:
+        applications = paths.data_home / "applications"
+        native = applications / "Zoom.desktop"
+        web = applications / "Zoom Web.desktop"
+        if native.exists() and self._is_native_zoom_desktop(native):
+            native.unlink()
+        if web.is_file():
+            for scheme in ("zoommtg", "zoomus"):
+                self._run(
+                    (
+                        "xdg-mime",
+                        "default",
+                        "Zoom Web.desktop",
+                        f"x-scheme-handler/{scheme}",
+                    )
+                )
+        self._run(("update-desktop-database", str(applications)))
 
     def _install_mamba(self, paths: ProgramPaths, *, quiet: bool) -> None:
         if (paths.mamba_root / "bin" / "mamba").is_file():
@@ -388,6 +608,8 @@ def format_program_list() -> str:
 
 MAMBA_BLOCK_START = "# >>> omarchy-setup mamba >>>"
 MAMBA_BLOCK_END = "# <<< omarchy-setup mamba <<<"
+ZEN_BINDING_START = "-- >>> omarchy-setup zen >>>"
+ZEN_BINDING_END = "-- <<< omarchy-setup zen <<<"
 
 
 def _shell_quote(value: Path) -> str:
@@ -434,6 +656,56 @@ def _install_mamba_shell_block(paths: ProgramPaths) -> None:
         ) from error
 
 
+def _zen_bindings_path(paths: ProgramPaths) -> Path:
+    config_home = paths.config_home or paths.shell_rc.parent / ".config"
+    return config_home / "hypr" / "bindings.lua"
+
+
+def _without_marked_block(contents: str, start: str, end: str) -> str:
+    start_at = contents.find(start)
+    if start_at < 0:
+        return contents
+    end_at = contents.find(end, start_at)
+    if end_at < 0:
+        raise ProgramError(f"managed configuration block starts with {start!r} but has no end")
+    end_at += len(end)
+    if end_at < len(contents) and contents[end_at] == "\n":
+        end_at += 1
+    return (contents[:start_at].rstrip() + "\n\n" + contents[end_at:].lstrip()).rstrip() + "\n"
+
+
+def _install_zen_binding(paths: ProgramPaths) -> None:
+    target = _zen_bindings_path(paths)
+    try:
+        contents = target.read_text() if target.exists() else ""
+        contents = _without_marked_block(contents, ZEN_BINDING_START, ZEN_BINDING_END)
+        block = (
+            f"{ZEN_BINDING_START}\n"
+            '-- Zen syncs normal new windows; blank-window creates an independent empty window.\n'
+            'hl.unbind("SUPER + SHIFT + B")\n'
+            'o.bind("SUPER + SHIFT + B", "Zen (blank window)", '
+            '"uwsm-app -- zen-browser --blank-window about:newtab")\n'
+            f"{ZEN_BINDING_END}\n"
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents.rstrip() + "\n\n" + block if contents.strip() else block)
+    except OSError as error:
+        raise ProgramError(f"could not configure Zen keybinding in {target}: {error}") from error
+
+
+def _remove_zen_binding(paths: ProgramPaths) -> None:
+    target = _zen_bindings_path(paths)
+    if not target.exists():
+        return
+    try:
+        contents = target.read_text()
+        updated = _without_marked_block(contents, ZEN_BINDING_START, ZEN_BINDING_END)
+        if updated != contents:
+            target.write_text(updated)
+    except OSError as error:
+        raise ProgramError(f"could not remove Zen keybinding from {target}: {error}") from error
+
+
 def _confirm(stdin: TextIO, stdout: TextIO) -> bool:
     print("Continue with this installation plan? [y/N] ", end="", flush=True, file=stdout)
     return stdin.readline().strip().lower() in {"y", "yes"}
@@ -475,6 +747,8 @@ def run_install(
                 actions.append("open login")
             if program.onboarding_required and not installed[program.name]:
                 actions.append("manual onboarding required")
+            if not install_only and program.kind == "zen":
+                actions.append("configure blank-window shortcut")
             display.message(f"  {program.label}: {', '.join(actions)}")
 
     if dry_run:
@@ -483,13 +757,18 @@ def run_install(
             print("Dry run complete; no programs changed or opened.", file=stdout)
         return 0
 
-    has_actions = bool(missing) or (not install_only and (login or set_defaults))
+    has_configuration = not install_only and any(
+        program.kind == "zen" for program in programs
+    )
+    has_actions = bool(missing) or has_configuration or (
+        not install_only and (login or set_defaults)
+    )
     if has_actions and not assume_yes and not _confirm(stdin, stdout):
         if not quiet:
             print("Cancelled. No programs changed or opened.", file=stdout)
         return 0
 
-    if any(program.kind != "mamba" for program in missing):
+    if any(program.packages for program in missing):
         display.message("Preparing Pacman repository databases.")
         backend.prepare_system_packages()
 
@@ -498,10 +777,13 @@ def run_install(
         if not installed[program.name]:
             display.stage(index + 2, f"Installing {program.label}")
             backend.install(program, paths, quiet=quiet)
-            if not backend.is_installed(program, paths):
-                raise ProgramError(f"{program.label} installation could not be verified")
         else:
             display.stage(index + 2, f"{program.label} already installed; skipping")
+
+        if not install_only:
+            backend.configure(program, paths)
+        if not backend.is_installed(program, paths):
+            raise ProgramError(f"{program.label} installation could not be verified")
 
         if set_defaults and not install_only and program.default_command is not None:
             backend.set_default(program)
@@ -522,4 +804,56 @@ def run_install(
                 "local onboarding.",
                 file=stdout,
             )
+    return 0
+
+
+def run_uninstall(
+    selection: str,
+    *,
+    paths: ProgramPaths,
+    backend: Backend,
+    assume_yes: bool,
+    dry_run: bool,
+    quiet: bool,
+    stdin: TextIO,
+    stdout: TextIO,
+    progress: bool = True,
+) -> int:
+    if selection == "all":
+        raise ProgramError("uninstall requires one explicit program; 'all' is not supported")
+    programs = resolve_programs(selection)
+    program = programs[0]
+    display = ProgressDisplay(stdout, enabled=progress, quiet=quiet, total=4)
+    display.stage(1, "Checking Omarchy compatibility")
+    version = backend.check_environment()
+    display.stage(2, f"Inspecting {program.label}")
+    installed = backend.is_installed(program, paths)
+
+    if not quiet:
+        display.message(f"Omarchy {version}")
+        display.message(
+            f"  {program.label}: {'uninstall integration' if installed else 'already absent'}"
+        )
+        display.message("  Application profiles and account data will be preserved.")
+
+    if not installed:
+        display.stage(4, f"{program.label} already absent; no changes")
+        return 0
+    if dry_run:
+        display.stage(4, "Dry run complete; no programs changed")
+        return 0
+    if not assume_yes:
+        print("Continue with this uninstall plan? [y/N] ", end="", flush=True, file=stdout)
+        if stdin.readline().strip().lower() not in {"y", "yes"}:
+            if not quiet:
+                print("Cancelled. No programs changed.", file=stdout)
+            return 0
+
+    display.stage(3, f"Uninstalling {program.label}")
+    backend.uninstall(program, paths, quiet=quiet)
+    if backend.is_installed(program, paths):
+        raise ProgramError(f"{program.label} uninstall could not be verified")
+    display.stage(4, "Uninstall verified")
+    if not quiet:
+        print(f"{program.label} integration removed; user data was preserved.", file=stdout)
     return 0

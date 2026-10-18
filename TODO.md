@@ -24,7 +24,12 @@
 - [ ] Implement `programs list`
 - [ ] Implement `programs status`
 - [x] Implement `--install-only`
+- [x] Add explicit single-program uninstall with preserved user data and safe exclusions for Miniforge/WinApps
 - [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
+- [x] Make Zen setup manage an idempotent `Super+Shift+B` unsynced blank-window override
+- [x] Add an Outlook web-app protocol with interactive login and notification onboarding
+- [x] Install native Zoom through `install all`, make it the meeting-link handler, and retain `zoom-web` as an optional fallback
+- [ ] Confirm native Zoom package, launcher preservation, protocol defaults, and idempotency in successful pinned/latest/upgrade VM runs
 - [x] Add Miniforge-backed `mamba` with an Omarchy-safe shell integration
 - [x] Review upstream WinApps and record a manual-first install, acceptance, and preservation-safe removal plan in `programs/winapps/PLAN.md`
 - [x] Audit WinApps plan for Mac layout fidelity, Dropbox co-authoring, sandbox/host evidence, OEM assets, and installer source drift
@@ -46,6 +51,8 @@
 - [x] Resolve shell surface colours from the native theme palette during installation
 - [x] Preserve the Olio overlay environment for bar-launched Omarchy commands
 - [x] Keep Spaces after Menu (replacing stock Workspaces), Omastorm radar after Weather, and Notification Center after Power in both bar modes
+- [x] Move managed plugins out of theme activation into `omarchy-setup plugin`; keep IDs, sources, placement, and safe replacements editable in `plugins/plugins.toml`
+- [x] Manage the built-in `omarchy.media` widget after Spaces without cloning Omarchy-owned source
 - [x] Screen-clamp oversized floating popups so Notification Center keeps the right-side gap
 - [x] Restore Notification Center own-service access through host-owned widget construction; visually verify fresh messages in both modes
 - [x] Align notification toast offsets with the accepted bar popups in both modes; preserve notification borders
@@ -67,6 +74,11 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Add real QML/VM acceptance for both styles, third-party previews, service-backed content, keyboard menus, and OSD
 - [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
 - [ ] Pin or record reviewed companion-plugin revisions so fresh installs do not silently consume newer upstream code
+- [x] Keep Battery Insights after the tray without replacing stock `omarchy.power`; repository/manifest and live loading are verified
+- [x] Manage Hyprmoncfg after Audio; install/verify its daemon before replacing stock Monitor
+- [ ] Physically validate Hyprmoncfg profiles across external-display hotplug, suspend/resume, lid changes, and rollback
+- [ ] Visually verify Weather Radar after Weather with retained Omastorm disabled
+- [ ] Add Weather Radar install, preview interaction, service/network behavior, and restore/fallback checks to pinned/latest/upgrade VM acceptance
 - [ ] Add Spaces acceptance in pinned/latest/upgrade VMs: workspace switching, hover preview, settings panel, inline persistence, stock restoration, and multi-output IPC-handler behavior
 - [ ] Validate Claude Spaces attention hooks; Codex 0.160.0 hook execution, active-shell routing, PID association, and visible waiting badge are verified
 - [ ] Resolve WinApps/FreeRDP 13x13 stale RemoteApp clients automatically; rootless Podman makes upstream `winapps killrdp` track the wrapper PID, while the project now installs a safe manual `winapps-clean-ghost` workaround that acts only on tracked marker-only sessions
@@ -87,7 +99,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] GitHub Actions basic CI
 - [x] Add non-mutating pre-commit checks and matching CI gate, including Actions lint and fast fixture tests
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
-- [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a six-hour release detector
+- [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a monthly/manual release detector
 - [ ] Validate the reviewed Omarchy 4.0.3 -> 4.0.4 drill (fresh 4.0.3, fresh 4.0.4, and configured upgrade) in GitHub Actions
   - Next run uses a guarded CI updater copy: same sudo TTY, restored upstream log, bounded status refresh, reboot deferred to the harness. Parallel targets and evidence-based per-step report implemented; end-to-end confirmation pending.
   - Run `37219721298` passed both fresh installs and all upgrade assertions; the sole failure was the immediate shell IPC ping after stock-shell restoration, while Omarchy Shell logged `service-ready` two seconds later. Added a bounded retry for only that transient startup error; end-to-end confirmation pending.

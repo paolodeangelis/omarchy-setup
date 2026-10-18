@@ -374,7 +374,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             Path(__file__).parents[1]
             / ".github/workflows/omarchy-release-check.yml"
         ).read_text()
-        self.assertIn("cron: '19 */6 * * *'", watcher)
+        self.assertIn("cron: '19 6 1 * *'", watcher)
         self.assertIn("gh workflow run omarchy-tests.yml", watcher)
         self.assertIn("omarchy-release-dispatched-v2-", watcher)
         self.assertIn("# Omarchy release report", watcher)

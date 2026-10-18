@@ -11,9 +11,6 @@ from omarchy_setup.cli import build_parser
 from omarchy_setup.modules.theme import host_integration
 
 from omarchy_setup.modules.theme.core import (
-    NOTIFICATION_CENTER_ID,
-    OMASTORM_ID,
-    SPACES_ID,
     OmarchyThemeBackend,
     ThemeError,
     ThemePaths,
@@ -23,8 +20,6 @@ from omarchy_setup.modules.theme.core import (
     theme_status,
     _validate_theme_toml,
     _resolve_palette_references,
-    _ensure_spaces_agent_hooks,
-    _run_plugin_command,
 )
 
 
@@ -67,9 +62,6 @@ class FakeBackend:
 
     def validate_hyprland(self) -> None:
         self.hyprland_validations += 1
-
-    def ensure_companion_plugins(self, paths: ThemePaths) -> None:
-        return None
 
 
 class ThemeTests(unittest.TestCase):
@@ -369,212 +361,6 @@ class ThemeTests(unittest.TestCase):
 
         self.assertEqual(fixed.action, "bar-fixed")
         self.assertEqual(floating.action, "bar-floating")
-
-    def test_companion_plugins_replace_workspaces_only_after_spaces_is_enabled(self) -> None:
-        plugins = self.paths.home / ".config" / "omarchy" / "plugins"
-        for plugin_id in (OMASTORM_ID, NOTIFICATION_CENTER_ID):
-            target = plugins / plugin_id
-            target.mkdir(parents=True)
-            target.joinpath("manifest.json").write_text("{}\n")
-
-        commands: list[tuple[str, ...]] = []
-
-        def record(command: tuple[str, ...], **_kwargs: object) -> str:
-            commands.append(command)
-            return ""
-
-        with patch("omarchy_setup.modules.theme.core._run", side_effect=record), patch(
-            "omarchy_setup.modules.theme.core._ensure_spaces_agent_hooks"
-        ):
-            OmarchyThemeBackend().ensure_companion_plugins(self.paths)
-
-        spaces_add = next(i for i, command in enumerate(commands) if command[:3] == ("omarchy", "plugin", "add"))
-        spaces_enable = commands.index(
-            (
-                "omarchy", "plugin", "enable", SPACES_ID,
-                "--section", "left", "--after", "omarchy.menu",
-            )
-        )
-        stock_disable = commands.index(("omarchy", "plugin", "disable", "omarchy.workspaces"))
-        self.assertLess(spaces_add, spaces_enable)
-        self.assertLess(spaces_enable, stock_disable)
-        self.assertFalse(any(command[:3] == ("omarchy", "plugin", "add") and OMASTORM_ID in command for command in commands))
-        self.assertFalse(any(command[:3] == ("omarchy", "plugin", "add") and NOTIFICATION_CENTER_ID in command for command in commands))
-
-    def test_companion_failure_does_not_disable_stock_workspaces(self) -> None:
-        commands: list[tuple[str, ...]] = []
-
-        def fail_spaces(command: tuple[str, ...], **_kwargs: object) -> str:
-            commands.append(command)
-            if command[:3] == ("omarchy", "plugin", "add"):
-                raise ThemeError("plugin install failed")
-            return ""
-
-        with patch("omarchy_setup.modules.theme.core._run", side_effect=fail_spaces):
-            with self.assertRaisesRegex(ThemeError, "plugin install failed"):
-                OmarchyThemeBackend().ensure_companion_plugins(self.paths)
-
-        self.assertNotIn(("omarchy", "plugin", "disable", "omarchy.workspaces"), commands)
-
-    def test_spaces_agent_hooks_are_merged_and_idempotent(self) -> None:
-        reporter = (
-            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
-            / "hooks" / "claude-hook"
-        )
-        reporter.parent.mkdir(parents=True, exist_ok=True)
-        reporter.write_text("#!/bin/sh\n")
-        self.paths.codex_hooks.parent.mkdir(parents=True)
-        self.paths.codex_hooks.write_text(
-            '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"keep"}]}]}}\n'
-        )
-
-        _ensure_spaces_agent_hooks(self.paths)
-        _ensure_spaces_agent_hooks(self.paths)
-
-        codex = __import__("json").loads(self.paths.codex_hooks.read_text())
-        self.assertEqual(codex["hooks"]["SessionStart"][0]["hooks"][0]["command"], "keep")
-        self.assertEqual(len(codex["hooks"]["PermissionRequest"]), 1)
-        self.assertTrue(
-            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"].endswith(
-                "omarchy-spaces-agent waiting"
-            )
-        )
-        self.assertIn(
-            str(self.paths.spaces_agent_command),
-            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["command"],
-        )
-        self.assertTrue(self.paths.spaces_agent_command.is_file())
-        self.assertTrue(self.paths.spaces_agent_command.stat().st_mode & 0o100)
-        self.assertTrue(
-            codex["hooks"]["Stop"][0]["hooks"][0]["command"].endswith(
-                "omarchy-spaces-agent done"
-            )
-        )
-        self.assertEqual(len(codex["hooks"]["Stop"]), 1)
-        claude = __import__("json").loads(self.paths.claude_settings.read_text())
-        self.assertTrue(claude["hooks"]["Notification"][0]["hooks"][0]["command"].endswith(
-            "omarchy-spaces-agent waiting"
-        ))
-        self.assertFalse(claude["hooks"]["Notification"][0]["hooks"][0]["async"])
-        for event in ("UserPromptSubmit", "PostToolUse", "PermissionRequest", "Stop", "Interrupt", "SessionEnd"):
-            self.assertFalse(codex["hooks"][event][0]["hooks"][0]["async"])
-        self.assertTrue((self.paths.spaces_agent_command).read_text().find('agent "$session" "$state"') >= 0)
-
-    def test_spaces_agent_hooks_replace_legacy_direct_reporter(self) -> None:
-        reporter = (
-            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
-            / "hooks" / "claude-hook"
-        )
-        reporter.parent.mkdir(parents=True, exist_ok=True)
-        reporter.write_text("#!/bin/sh\n")
-        self.paths.codex_hooks.parent.mkdir(parents=True)
-        legacy = f"{reporter} waiting"
-        self.paths.codex_hooks.write_text(
-            __import__("json").dumps({
-                "hooks": {
-                    "PermissionRequest": [{
-                        "hooks": [{"type": "command", "command": legacy, "async": True}]
-                    }]
-                }
-            })
-        )
-
-        _ensure_spaces_agent_hooks(self.paths)
-
-        codex = __import__("json").loads(self.paths.codex_hooks.read_text())
-        commands = [
-            handler["command"]
-            for group in codex["hooks"]["PermissionRequest"]
-            for handler in group["hooks"]
-        ]
-        self.assertEqual(len(commands), 1)
-        self.assertNotEqual(commands[0], legacy)
-        self.assertTrue(commands[0].endswith("omarchy-spaces-agent waiting"))
-        self.assertFalse(
-            codex["hooks"]["PermissionRequest"][0]["hooks"][0]["async"]
-        )
-
-    def test_spaces_agent_hook_waits_for_ordered_shell_ipc(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            fake_bin = Path(directory) / "bin"
-            fake_bin.mkdir()
-            capture = Path(directory) / "arguments"
-            completed = Path(directory) / "completed"
-            fake_commands = {
-                "systemctl": "#!/bin/sh\nexit 0\n",
-                "jq": "#!/bin/sh\ncat >/dev/null\nprintf 'fixture-session\\n'\n",
-                "omarchy-shell": (
-                    "#!/bin/sh\n"
-                    "printf '%s\\n' \"$@\" > \"$SPACES_AGENT_CAPTURE\"\n"
-                    "sleep 0.1\n"
-                    "touch \"$SPACES_AGENT_COMPLETE\"\n"
-                ),
-            }
-            for name, script in fake_commands.items():
-                command = fake_bin / name
-                command.write_text(script)
-                command.chmod(0o755)
-            wrapper = Path(directory) / "omarchy-spaces-agent"
-            wrapper.write_text(self.paths.spaces_agent_template.read_text())
-            wrapper.chmod(0o755)
-
-            environment = os.environ.copy()
-            environment.update({
-                "PATH": f"{fake_bin}{os.pathsep}{environment['PATH']}",
-                "SPACES_AGENT_CAPTURE": str(capture),
-                "SPACES_AGENT_COMPLETE": str(completed),
-            })
-            result = subprocess.run(
-                [str(wrapper), "waiting"],
-                input='{"session_id":"fixture-session"}\n',
-                text=True,
-                env=environment,
-                check=False,
-            )
-
-            self.assertEqual(result.returncode, 0)
-            self.assertTrue(completed.is_file())
-            arguments = capture.read_text().splitlines()
-            self.assertEqual(arguments[:4], [
-                "tornikegomareli.spaces", "agent", "fixture-session", "waiting"
-            ])
-            self.assertRegex(arguments[4], r"^\d+(,\d+)*$")
-
-    def test_spaces_agent_hooks_preserve_invalid_user_configuration(self) -> None:
-        reporter = (
-            self.paths.home / ".config" / "omarchy" / "plugins" / SPACES_ID
-            / "hooks" / "claude-hook"
-        )
-        reporter.parent.mkdir(parents=True, exist_ok=True)
-        reporter.write_text("#!/bin/sh\n")
-        self.paths.codex_hooks.parent.mkdir(parents=True)
-        self.paths.codex_hooks.write_text("not-json\n")
-
-        with self.assertRaisesRegex(ThemeError, "invalid Codex hooks configuration"):
-            _ensure_spaces_agent_hooks(self.paths)
-
-        self.assertEqual(self.paths.codex_hooks.read_text(), "not-json\n")
-        self.assertFalse(self.paths.claude_settings.exists())
-
-    def test_plugin_command_retries_transient_shell_startup(self) -> None:
-        calls = 0
-
-        def flaky(_command: tuple[str, ...], **_kwargs: object) -> str:
-            nonlocal calls
-            calls += 1
-            if calls < 3:
-                raise ThemeError("omarchy plugin add: omarchy-shell is not responding")
-            return "ok"
-
-        with patch("omarchy_setup.modules.theme.core._run", side_effect=flaky), patch(
-            "omarchy_setup.modules.theme.core.time.sleep"
-        ) as pause:
-            self.assertEqual(
-                _run_plugin_command(("omarchy", "plugin", "add"), environment={}),
-                "ok",
-            )
-        self.assertEqual(calls, 3)
-        self.assertEqual(pause.call_count, 2)
 
     def test_failed_activation_restores_existing_user_files(self) -> None:
         self.paths.user_theme.mkdir(parents=True)

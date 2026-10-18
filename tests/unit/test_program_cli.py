@@ -52,6 +52,13 @@ class ProgramCliTests(unittest.TestCase):
         self.assertIn("Zen Browser", listing)
         self.assertIn("all", listing)
 
+    def test_uninstall_requires_one_named_program(self) -> None:
+        args = build_parser().parse_args(["uninstall", "zen", "-y"])
+
+        self.assertEqual(args.command, "uninstall")
+        self.assertEqual(args.target, "zen")
+        self.assertTrue(args.yes)
+
 
 if __name__ == "__main__":
     unittest.main()
