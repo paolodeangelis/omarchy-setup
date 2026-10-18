@@ -87,7 +87,7 @@ def main():
     }, indent=2))
     # Exercise deterministic panel rendering without asserting remote weather,
     # network, Bluetooth, audio, or battery data that a CI guest may not have.
-    for plugin in ("omarchy.weather", "omarchy.bluetooth", "omarchy.network", "omarchy.audio", "omarchy.monitor"):
+    for plugin in ("omarchy.weather", "omarchy.bluetooth", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg"):
         capture_panel(output, plugin)
 
     screenshot = capture_panel(output, "jankeesvw.notification-center", delay=3)

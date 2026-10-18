@@ -103,6 +103,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Retire the temporary 4.0.3 drill and pin the workstation baseline to Omarchy 4.0.4
 - [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
+  - Run `39159884581` passed setup, hooks, doctor, and shell-log checks on all targets, then exposed a stale visual check for disabled `omarchy.monitor`; the harness now exercises its active `crmne.hyprmoncfg` replacement.
 - [ ] Confirm fresh Omarchy 4.0.5 VM acceptance with the reviewed 4.0.5 shell-interface hashes; run `39157319202` reached desktop acceptance and exposed exact built-in media/stock-bar startup warnings
 - [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
   - Run `39157319202` accepted the reviewed interfaces; its 4.0.4 phases showed generic shell readiness precedes the Spaces IPC handler, so acceptance now waits for that specific handler. Confirmation is pending.
