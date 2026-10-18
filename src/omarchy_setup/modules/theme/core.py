@@ -225,6 +225,10 @@ class ThemePaths:
     def uwsm_override(self) -> Path:
         return self.home / ".config" / "uwsm" / "env.d" / "90-omarchy-setup-theme"
 
+    @property
+    def post_update_hook(self) -> Path:
+        return self.repo_root / "themes" / THEME_NAME / "hooks" / "refresh-overlay.hook"
+
 
 class ThemeBackend(Protocol):
     def build_blobs(self, paths: ThemePaths, destination: Path) -> None: ...
@@ -242,6 +246,8 @@ class ThemeBackend(Protocol):
     def set_theme(self, name: str, *, preserve_background: bool = False) -> None: ...
 
     def validate_hyprland(self) -> None: ...
+
+    def install_post_update_hook(self, source: Path) -> None: ...
 
 
 def _run(command: tuple[str, ...], *, environment: dict[str, str] | None = None) -> str:
@@ -356,6 +362,9 @@ class OmarchyThemeBackend:
         errors = _run(("hyprctl", "configerrors"))
         if errors:
             raise ThemeError(f"Hyprland configuration errors:\n{errors}")
+
+    def install_post_update_hook(self, source: Path) -> None:
+        _run(("omarchy", "hook", "install", "post-update", str(source)))
 
     @staticmethod
     def _set_environment(target_root: Path) -> None:
@@ -952,6 +961,7 @@ def configure_theme(
             }
         )
         _write_atomic(paths.state_file, json.dumps(state, indent=2, sort_keys=True) + "\n")
+        backend.install_post_update_hook(paths.post_update_hook)
         _retire_legacy_bar_link(paths)
         stage(6, "Theme setup verified")
         return f"{style} bar configured; shell {overlay_result}"

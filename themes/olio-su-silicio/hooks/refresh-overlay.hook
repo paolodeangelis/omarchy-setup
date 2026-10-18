@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+state="$HOME/.local/state/omarchy-setup/themes/olio-su-silicio/state.json"
+launcher="$HOME/.local/bin/omarchy-setup"
+[[ -x $launcher && -r $state ]] || exit 0
+[[ $(jq -r '.active // false' "$state") == true ]] || exit 0
+style=$(jq -r '.bar_style // "fixed"' "$state")
+exec "$launcher" theme "bar-$style" -y --no-progress

@@ -107,3 +107,4 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Confirm fresh Omarchy 4.0.5 VM acceptance with the reviewed 4.0.5 shell-interface hashes; run `39157319202` reached desktop acceptance and exposed exact built-in media/stock-bar startup warnings
 - [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
   - Run `39157319202` accepted the reviewed interfaces; its 4.0.4 phases showed generic shell readiness precedes the Spaces IPC handler, so acceptance now waits for that specific handler. Confirmation is pending.
+  - Run `39161736581` passed both fresh targets, then proved the active 4.0.4 overlay was stale after the 4.0.5 update. Theme activation now installs an official post-update hook that rebuilds the selected bar style; VM confirmation is pending.

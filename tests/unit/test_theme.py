@@ -31,6 +31,7 @@ class FakeBackend:
         self.restarts: list[Path] = []
         self.themes: list[str] = []
         self.hyprland_validations = 0
+        self.update_hooks: list[Path] = []
 
     def build_blobs(self, paths: ThemePaths, destination: Path) -> None:
         self.builds += 1
@@ -62,6 +63,9 @@ class FakeBackend:
 
     def validate_hyprland(self) -> None:
         self.hyprland_validations += 1
+
+    def install_post_update_hook(self, source: Path) -> None:
+        self.update_hooks.append(source)
 
 
 class ThemeTests(unittest.TestCase):
@@ -319,6 +323,7 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(config["bar"]["position"], "top")
         self.assertEqual(config["bar"]["style"], "floating")
         self.assertEqual(self.backend.active, self.paths.overlay_root)
+        self.assertEqual(self.backend.update_hooks, [self.paths.post_update_hook])
 
         with patch(
             "omarchy_setup.modules.theme.core.SUPPORTED_KEYBOARD_PANEL_SHA256",
@@ -327,6 +332,7 @@ class ThemeTests(unittest.TestCase):
             result = configure_theme(self.paths, self.backend, "fixed")
         self.assertIn("fixed bar configured", result)
         self.assertEqual(self.backend.active, self.paths.overlay_root)
+        self.assertEqual(self.backend.update_hooks, [self.paths.post_update_hook] * 2)
         fixed_shell = __import__("tomllib").loads(
             self.paths.user_theme.joinpath("shell.toml").read_text()
         )
