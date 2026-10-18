@@ -84,7 +84,11 @@ class ThemeTests(unittest.TestCase):
             "}\n"
         )
         host_files = {
-            "shell.qml": 'import "services"\n      _barEntryShellLookup: function(ownerId, moduleName) {\n',
+            "shell.qml": (
+                'import "services"\n'
+                "    delete copy.__sourceDir\n"
+                "      _barEntryShellLookup: function(ownerId, moduleName) {\n"
+            ),
             "services/PluginShellApi.qml": "  property var _barEntryShellLookup: null\n  function serviceFor(id) {\n",
             "plugins/notifications/Service.qml": (
                 "      readonly property var popupPlacement: NotificationLogic.popupPlacement(\n"
@@ -262,6 +266,7 @@ class ThemeTests(unittest.TestCase):
         host = (overlay / "shell.qml").read_text()
         self.assertIn("hasCurrentBarCapabilities()", host)
         self.assertIn("OlioHostedWidgets.create(shell, key, moduleName, parent, barApi)", host)
+        self.assertNotIn("delete copy.__sourceDir", host)
         service = (overlay / "plugins/notifications/Service.qml").read_text()
         self.assertIn("notificationPlacement !== undefined", service)
         self.assertIn(": NotificationLogic.popupPlacement(", service)

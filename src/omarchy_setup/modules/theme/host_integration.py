@@ -36,6 +36,10 @@ def install(shell: Path, templates: Path) -> None:
     validate_sources(shell)
     for name in ("OlioHostedWidgets.js", "OlioHostedBarWidget.qml"):
         shutil.copy2(templates / name, shell / "services" / name)
+    legacy_source_dir_filter = "    delete copy.__sourceDir\n"
+    if legacy_source_dir_filter in (shell / "shell.qml").read_text():
+        _replace(shell / "shell.qml", legacy_source_dir_filter,
+                 "    // Preserve bundled script discovery for third-party plugins.\n")
     _replace(shell / "shell.qml", 'import "services"\n',
              'import "services"\nimport "services/OlioHostedWidgets.js" as OlioHostedWidgets\n')
     marker = "      _barEntryShellLookup: function(ownerId, moduleName) {\n"

@@ -24,10 +24,17 @@ SHELL_ERROR_PATTERN = re.compile(
 # assignment; the pristine-shell acceptance run produces the same signatures.
 # Keep the exception narrow so lifecycle, assignment, loading, and plugin-host
 # errors still fail doctor and VM acceptance.
-KNOWN_STOCK_PANEL_WARNING = re.compile(
-    r"/shell/plugins/panels/[^/]+/Panel\.qml.*TypeError: Cannot read property "
-    r"'(?:foreground|fontFamily|urgent)' of null",
-    re.IGNORECASE,
+KNOWN_PANEL_STARTUP_WARNINGS = (
+    re.compile(
+        r"/shell/plugins/panels/[^/]+/Panel\.qml.*TypeError: Cannot read property "
+        r"'(?:foreground|fontFamily|urgent)' of null",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"/plugins/aabulkhairov\.battery-insights/Widget\.qml.*TypeError: Cannot read property "
+        r"'(?:foreground|fontFamily)' of null",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -54,7 +61,7 @@ def shell_log_findings(log: str) -> tuple[list[str], list[str]]:
     for line in log.splitlines():
         if not SHELL_ERROR_PATTERN.search(line):
             continue
-        if KNOWN_STOCK_PANEL_WARNING.search(line):
+        if any(pattern.search(line) for pattern in KNOWN_PANEL_STARTUP_WARNINGS):
             known_stock.append(line)
         else:
             suspicious.append(line)
@@ -110,7 +117,7 @@ def collect_checks(*, runner: Runner = _default_runner, home: Path | None = None
     errors, known_stock = shell_log_findings(log) if code == 0 else ([], [])
     detail = f"{len(errors)} suspicious line(s)"
     if known_stock:
-        detail += f"; {len(known_stock)} known stock panel startup warning(s)"
+        detail += f"; {len(known_stock)} known panel startup warning(s)"
     checks.append(Check("recent shell log", code == 0 and not errors, detail if code == 0 else "unavailable"))
     return checks
 
