@@ -311,6 +311,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
         self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
         self.assertIn('$wrapper waiting', guest)
+        self.assertIn('Spaces agent IPC did not become ready after 15 seconds', guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)

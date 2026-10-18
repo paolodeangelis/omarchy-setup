@@ -35,6 +35,16 @@ KNOWN_PANEL_STARTUP_WARNINGS = (
         r"'(?:foreground|fontFamily)' of null",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"/shell/plugins/services/media/BarWidget\.qml.*TypeError: Cannot read property "
+        r"'(?:barForeground|foreground|fontFamily|vertical)' of null",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"@plugins/bar/Bar\.qml.*TypeError: Cannot read property 'pluginBarApiFor' of undefined "
+        r"\(exception occurred during delayed function evaluation\)",
+        re.IGNORECASE,
+    ),
 )
 
 

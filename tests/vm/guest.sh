@@ -95,7 +95,7 @@ checks() {
   [[ -z $(hyprctl configerrors) ]]
 }
 agent_hooks_configured() {
-  local wrapper="$STATE_ROOT/bin/omarchy-spaces-agent"
+  local wrapper="$STATE_ROOT/bin/omarchy-spaces-agent" attempt
   local reporter="$HOME/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook"
   [[ -x $wrapper && -x $reporter ]]
   jq -e --arg command "$wrapper waiting" '
@@ -111,7 +111,16 @@ agent_hooks_configured() {
     [.hooks.Notification[].hooks[] | select(.type == "command") | .command]
     | index($command) != null
   ' "$HOME/.claude/settings.json" >/dev/null
-  printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" waiting
+  for ((attempt = 1; attempt <= 30; attempt++)); do
+    if printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" waiting; then
+      break
+    fi
+    if ((attempt == 30)); then
+      echo 'Spaces agent IPC did not become ready after 15 seconds' >&2
+      return 1
+    fi
+    sleep 0.5
+  done
   printf '{"session_id":"ci-spaces-hook-smoke"}\n' | "$wrapper" end
 }
 zoom_native_configured() {

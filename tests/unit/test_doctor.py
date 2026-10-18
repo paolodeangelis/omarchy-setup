@@ -21,11 +21,21 @@ class DoctorTests(unittest.TestCase):
             "aabulkhairov.battery-insights/Widget.qml[12:-1]: "
             "TypeError: Cannot read property 'fontFamily' of null"
         )
+        media = (
+            "WARN qs:///usr/share/omarchy/shell/plugins/services/media/BarWidget.qml[39:-1]: "
+            "TypeError: Cannot read property 'barForeground' of null"
+        )
+        delayed_bar_reload = (
+            "WARN scene: @plugins/bar/Bar.qml[2020:-1]: TypeError: Cannot read property "
+            "'pluginBarApiFor' of undefined (exception occurred during delayed function evaluation)"
+        )
 
-        suspicious, known_stock = shell_log_findings(f"{known}\n{custom}\n{battery}\n")
+        suspicious, known_stock = shell_log_findings(
+            f"{known}\n{custom}\n{battery}\n{media}\n{delayed_bar_reload}\n"
+        )
 
         self.assertEqual(suspicious, [custom])
-        self.assertEqual(known_stock, [known, battery])
+        self.assertEqual(known_stock, [known, battery, media, delayed_bar_reload])
 
     def test_checks_live_shell_and_critical_interfaces(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
