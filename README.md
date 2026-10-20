@@ -1,6 +1,6 @@
 # omarchy-setup
 
-[![Omarchy 4.0.4](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
+[![Omarchy 4.0.5](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
 
 Personal, reproducible setup and configuration framework for Omarchy.
 
@@ -133,7 +133,10 @@ available Omarchy default:
 
 ```bash
 omarchy-setup install zen --login --default
+omarchy-setup install 1password --login
 omarchy-setup install dropbox --login
+omarchy-setup install libreoffice
+omarchy-setup install zotero -l
 omarchy-setup install outlook --login
 omarchy-setup install zoom --login
 omarchy-setup install zoom-web --login  # optional browser-based fallback
@@ -158,12 +161,30 @@ WinApps removal remain manual because their trees may contain user environments
 or a Windows guest disk. Zen removal also refuses to proceed while Zen is the
 active default browser; select another default first.
 
+## Dotfiles
+
+Install pinned tmux Resurrect/Continuum support and apply the managed
+`Super+Q` close-window override:
+
+```bash
+omarchy-setup dotfiles -y
+```
+
+Continuum saves every 15 minutes and restores the latest tmux layout when the
+first tmux server starts after reboot. `Ctrl+Space`, then `Ctrl+S` saves now;
+`Ctrl+Space`, then `Ctrl+R` restores manually. Running processes are not
+preserved across reboot.
+
 Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
-`spotify`, native Zoom, the Outlook and WhatsApp web apps, `telegram`, and
+`spotify`, LibreOffice with English/Italian spell checking, Zotero, native Zoom, the
+Outlook and WhatsApp web apps, `telegram`, and
 WinApps. Native Zoom is included in `install all`; its launcher becomes the
 verified handler for `zoommtg://` and `zoomus://` links. The separate
 `zoom-web` protocol is an optional fallback and is not included in `all`.
 The native client is installed from AUR through Omarchy's supported helper.
+1Password uses Omarchy's supported service installer for the desktop app, CLI,
+and Chromium extension. `--login` opens the desktop app for interactive sign-in;
+credentials are never handled or stored by `omarchy-setup`.
 `mamba` installs a pinned,
 checksum-verified Miniforge release under
 `~/.local/share/omarchy-setup/miniforge3`, appends one marked integration block
@@ -256,6 +277,20 @@ shared by both modes live in `shell.toml`. Fixed/liquid-only differences live
 in the partial `shell-fixed.toml`; `theme bar-fixed` merges that file over the
 common shell theme. The checked-in source files remain directly editable and
 generated mode output stays out of Git.
+
+Repository wallpapers live in
+`themes/olio-su-silicio/omarchy-theme/backgrounds`. Every image has a
+same-stem JSON record for its title, attribution, source, and rights; theme
+activation rejects missing or malformed pairs. Adding a valid image/JSON pair
+automatically makes it available to Omarchy without editing Python. Press
+`Super+Ctrl+Space` for Omarchy's background chooser, or run
+`omarchy theme bg next` to advance directly. The bottom-right `i` button shows
+the current painting's author, title, year, and collection on hover. Olio also advances
+the background every 24 hours while its shell session remains running.
+The control's size, edge spacing, and opacity are directly editable in
+`themes/olio-su-silicio/shell/ArtworkInfo.qml` (`font.pixelSize`,
+`anchors.rightMargin`/`bottomMargin`, and the icon/card opacity values in
+`ArtworkInfo.qml`).
 
 Fixed liquid mode uses separate Wayland surfaces for the persistent bar and
 the popup. Matching translucent alpha values match their RGBA configuration,
@@ -408,9 +443,9 @@ The same hooks run in GitHub-hosted CI. Hook installation is opt-in per clone.
 ### System checks
 
 Every pushed commit runs one compatibility workflow containing fast project
-checks, a fresh Omarchy 4.0.4 VM, and the WinApps basic compatibility test. If
-the newest official stable release is newer than 4.0.4, the same run adds both
-a fresh candidate VM and a configured 4.0.4-to-candidate upgrade VM. A separate
+checks, a fresh Omarchy 4.0.5 VM, and the WinApps basic compatibility test. If
+the newest official stable release is newer than 4.0.5, the same run adds both
+a fresh candidate VM and a configured 4.0.5-to-candidate upgrade VM. A separate
 monthly release check dispatches this complete workflow once for each newly
 detected stable version; later manual runs or commits can retest a failure.
 The VM jobs use the pinned official ISO harness, verified ISO checksums, and an

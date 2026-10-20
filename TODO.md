@@ -26,6 +26,8 @@
 - [x] Implement `--install-only`
 - [x] Add explicit single-program uninstall with preserved user data and safe exclusions for Miniforge/WinApps
 - [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
+- [x] Add LibreOffice with US English and Italian spell-check dictionaries
+- [x] Add Zotero with interactive account and sync onboarding
 - [x] Make Zen setup manage an idempotent `Super+Shift+B` unsynced blank-window override
 - [x] Add an Outlook web-app protocol with interactive login and notification onboarding
 - [x] Install native Zoom through `install all`, make it the meeting-link handler, and retain `zoom-web` as an optional fallback
@@ -42,6 +44,7 @@
 
 ## Configuration
 - [ ] Dotfile deployment
+- [x] Manage tmux layout persistence and the Super+Q close-window override
 - [x] Theme management
 - [x] Implement fixed-liquid and floating bar appearances (currently both use the overlay)
 - [x] Reach user-accepted bar appearance and popup spacing; preserve this visual baseline
@@ -58,7 +61,8 @@
 - [x] Align notification toast offsets with the accepted bar popups in both modes; preserve notification borders
 - [x] Audit Omacale 0.39.0 popup lifecycle and document a fixed-only compatibility-safe animation plan (source analysis, not measured video proof)
 - [x] Add fixed-only retained popup geometry and spatial morphing; locally verify rapid reversal, floating gap, Notification Center, Spaces preview, menu, and OSD
-- [ ] Assets management
+- [x] Track theme wallpapers with descriptive filenames and validated same-stem artwork metadata
+- [x] Add a bottom-layer artwork-info control, working background-picker shortcut, and 24-hour wallpaper rotation to the Olio shell
 - [ ] Framework-specific configuration
 
 ### Deferred compatibility follow-up
@@ -70,6 +74,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Investigate Notification Center's DND control separately: its cross-service lookup is outside the own-service permission scope
 - [ ] Verify floating renderer parity and TOML gap/height semantics without retuning accepted geometry
 - [ ] Validate overlay reuse against all relevant upstream changes and verify complete stock restore
+- [x] Wait for the previous Quickshell instance to exit before launching a rebuilt overlay; locally verified after the 4.0.5 workstation update
 - [ ] Make doctor detect QML property-assignment errors and distinguish missing evidence from healthy checks
 - [ ] Add real QML/VM acceptance for both styles, third-party previews, service-backed content, keyboard menus, and OSD
 - [ ] Complete pointer-driven radar preview/Spaces hover, translucent, Tab/repeated-click, multi-output, fallback, and restore animation acceptance
@@ -99,12 +104,12 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] GitHub Actions basic CI
 - [x] Add non-mutating pre-commit checks and matching CI gate, including Actions lint and fast fixture tests
 - [x] Cover release skip/checksum failure, guarded harness adaptation and missing/error-filled shell logs with unit tests
-- [x] Consolidate commit-triggered 4.0.4, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a monthly/manual release detector
-- [x] Retire the temporary 4.0.3 drill and pin the workstation baseline to Omarchy 4.0.4
-- [x] Establish Omarchy 4.0.4 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
+- [x] Consolidate commit-triggered pinned, fresh-candidate, configured-upgrade, and WinApps checks behind one version-named workflow plus a monthly/manual release detector
+- [x] Pin the workstation baseline to Omarchy 4.0.5
+- [ ] Establish Omarchy 4.0.5 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
   - Run `39159884581` passed setup, hooks, doctor, and shell-log checks on all targets, then exposed a stale visual check for disabled `omarchy.monitor`; the harness now exercises its active `crmne.hyprmoncfg` replacement.
 - [ ] Confirm fresh Omarchy 4.0.5 VM acceptance with the reviewed 4.0.5 shell-interface hashes; run `39157319202` reached desktop acceptance and exposed exact built-in media/stock-bar startup warnings
-- [ ] Run configured 4.0.4 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
+- [ ] Run configured 4.0.5 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
   - Run `39157319202` accepted the reviewed interfaces; its 4.0.4 phases showed generic shell readiness precedes the Spaces IPC handler, so acceptance now waits for that specific handler. Confirmation is pending.
   - Run `39161736581` passed both fresh targets, then proved the active 4.0.4 overlay was stale after the 4.0.5 update. Theme activation now installs an official post-update hook that rebuilds the selected bar style; VM confirmation is pending.
