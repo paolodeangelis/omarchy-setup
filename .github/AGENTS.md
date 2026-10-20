@@ -1,6 +1,6 @@
 # Workflow compatibility contract
 
-- Maintain separate fresh-install targets for the pinned workstation baseline (currently Omarchy 4.0.4) and latest stable Omarchy. Never replace the pinned regression target with latest.
+- Maintain separate fresh-install targets for the pinned workstation baseline (currently Omarchy 4.0.5) and latest stable Omarchy. Never replace the pinned regression target with latest.
 - Latest-release testing must have an explicit repeatable release-discovery/trigger mechanism, record the resolved version and verified ISO identity, and report resolution failures instead of silently retesting an older release.
 - Run actual Omarchy compatibility checks inside disposable booted VMs with the required desktop/session services. Ubuntu CI or a container alone does not establish desktop compatibility.
 - Read `tests/vm/AGENTS.md` before changing the VM harness. Runner prerequisites and missing runners must be explicit; never claim an unexecuted job passed.

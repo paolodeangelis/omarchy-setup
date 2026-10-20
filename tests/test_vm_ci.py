@@ -24,14 +24,14 @@ class VmCiTests(unittest.TestCase):
         self.resolve = module("resolve")
         self.host = module("host")
         self.config = {
-            "baseline": "4.0.4",
+            "baseline": "4.0.5",
             "harness_commit": "reviewed",
             "upgrade_drills": {"4.0.3": {"iso_sha256": "reviewed"}},
         }
 
     def test_pinned_does_not_follow_latest(self):
         plan = self.resolve.plan(self.config, "pinned", "v9.0.0")
-        self.assertEqual(plan["install_version"], "4.0.4")
+        self.assertEqual(plan["install_version"], "4.0.5")
         self.assertTrue(plan["run"])
 
     def test_candidate_skips_equal_and_older(self):
@@ -40,7 +40,7 @@ class VmCiTests(unittest.TestCase):
                 self.assertFalse(self.resolve.plan(self.config, mode, version)["run"])
 
     def test_upgrade_installs_baseline_latest_installs_candidate(self):
-        for mode, expected in (("upgrade", "4.0.4"), ("latest", "4.0.10")):
+        for mode, expected in (("upgrade", "4.0.5"), ("latest", "4.0.10")):
             plan = self.resolve.plan(self.config, mode, "v4.0.10")
             self.assertTrue(plan["run"])
             self.assertEqual(plan["install_version"], expected)
@@ -336,7 +336,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         workflow = (
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
-        self.assertIn("name: Omarchy 4.0.4", workflow)
+        self.assertIn("name: Omarchy 4.0.5", workflow)
         self.assertNotIn("upgrade_from:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("mode: pinned", workflow)
