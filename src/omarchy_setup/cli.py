@@ -14,6 +14,12 @@ from omarchy_setup.modules.deblob import (
     run_deblob,
 )
 from omarchy_setup.modules.doctor import run_doctor
+from omarchy_setup.modules.dotfiles import (
+    DotfilesError,
+    DotfilesPaths,
+    OmarchyDotfilesBackend,
+    run_dotfiles,
+)
 from omarchy_setup.modules.init import (
     InitError,
     InitPaths,
@@ -203,6 +209,16 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_upgrade.add_argument("--dry-run", action="store_true")
     plugin_upgrade.add_argument("--no-progress", action="store_true")
 
+    dotfiles = commands.add_parser(
+        "dotfiles", help="apply managed tmux persistence and Hyprland overrides"
+    )
+    dotfiles.add_argument(
+        "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
+        help="accept the reversible dotfile changes",
+    )
+    dotfiles.add_argument("--dry-run", action="store_true")
+    dotfiles.add_argument("--no-progress", action="store_true")
+
     theme = commands.add_parser("theme", help="install olio-su-silicio and select its bar style")
     theme.add_argument(
         "action",
@@ -314,6 +330,17 @@ def main(
                 stdout=stdout,
                 progress=not getattr(args, "no_progress", False),
             )
+        if args.command == "dotfiles":
+            paths = DotfilesPaths.for_user()
+            return run_dotfiles(
+                paths=paths,
+                backend=backend or OmarchyDotfilesBackend(),
+                assume_yes=args.yes,
+                dry_run=args.dry_run,
+                stdin=stdin,
+                stdout=stdout,
+                progress=not args.no_progress,
+            )
         if args.command == "theme":
             return run_theme(
                 args.action,
@@ -325,7 +352,7 @@ def main(
                 stdout=stdout,
                 progress=not args.no_progress,
             )
-    except (DeblobError, InitError, PluginError, ProgramError, ThemeError, WinAppsError) as error:
+    except (DeblobError, DotfilesError, InitError, PluginError, ProgramError, ThemeError, WinAppsError) as error:
         print(f"Error: {error}", file=stderr)
         return 2
 

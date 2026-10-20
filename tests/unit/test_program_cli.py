@@ -59,6 +59,13 @@ class ProgramCliTests(unittest.TestCase):
         self.assertEqual(args.target, "zen")
         self.assertTrue(args.yes)
 
+    def test_dotfiles_supports_automatic_and_dry_run_modes(self) -> None:
+        args = build_parser().parse_args(["dotfiles", "-y", "--dry-run"])
+
+        self.assertEqual(args.command, "dotfiles")
+        self.assertTrue(args.yes)
+        self.assertTrue(args.dry_run)
+
 
 if __name__ == "__main__":
     unittest.main()
