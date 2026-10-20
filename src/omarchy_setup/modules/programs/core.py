@@ -172,6 +172,27 @@ PROGRAMS = (
         login_command=("omarchy", "launch", "spotify"),
     ),
     Program(
+        name="libreoffice",
+        label="LibreOffice",
+        description=(
+            "Install LibreOffice with US English and Italian spell-check dictionaries."
+        ),
+        packages=("libreoffice-fresh", "hunspell-en_us", "hunspell-it"),
+        install_command=(
+            "omarchy", "pkg", "add",
+            "libreoffice-fresh", "hunspell-en_us", "hunspell-it",
+        ),
+        aliases=("libre-office",),
+    ),
+    Program(
+        name="zotero",
+        label="Zotero",
+        description="Install Zotero and open it for account and sync setup.",
+        packages=("zotero-bin",),
+        install_command=("omarchy", "pkg", "aur", "add", "zotero-bin"),
+        login_command=("uwsm-app", "--", "zotero"),
+    ),
+    Program(
         name="outlook",
         label="Outlook",
         description="Install Outlook on the web as an Omarchy application.",

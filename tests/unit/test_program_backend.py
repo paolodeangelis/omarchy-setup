@@ -173,6 +173,44 @@ class ProgramBackendTests(unittest.TestCase):
             "omarchy", "launch", "webapp", "https://outlook.office.com/mail/",
         ))
 
+    def test_1password_uses_supported_service_installer_and_login(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "1password")
+
+        self.assertEqual(program.packages, ("1password", "1password-cli"))
+        self.assertEqual(
+            program.install_command,
+            ("omarchy", "install", "service", "1password"),
+        )
+        self.assertEqual(
+            program.login_command,
+            ("omarchy", "launch", "1password"),
+        )
+
+    def test_libreoffice_installs_english_and_italian_dictionaries(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "libreoffice")
+
+        self.assertEqual(
+            program.packages,
+            ("libreoffice-fresh", "hunspell-en_us", "hunspell-it"),
+        )
+        self.assertEqual(
+            program.install_command,
+            (
+                "omarchy", "pkg", "add",
+                "libreoffice-fresh", "hunspell-en_us", "hunspell-it",
+            ),
+        )
+
+    def test_zotero_uses_aur_binary_and_opens_account_onboarding(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "zotero")
+
+        self.assertEqual(program.packages, ("zotero-bin",))
+        self.assertEqual(
+            program.install_command,
+            ("omarchy", "pkg", "aur", "add", "zotero-bin"),
+        )
+        self.assertEqual(program.login_command, ("uwsm-app", "--", "zotero"))
+
     def test_zoom_uses_native_package_and_web_fallback_is_separate(self) -> None:
         program = next(program for program in PROGRAMS if program.name == "zoom")
         web = next(program for program in PROGRAMS if program.name == "zoom-web")
