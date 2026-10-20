@@ -12,6 +12,9 @@ SUPPORTED = {
     "services/PluginShellApi.qml": {
         "ff0cb5ec5fcdda0b21af447b11f07a24e065a3557796639364109aaa2ce5c763"
     },
+    "Commons/Util.qml": {
+        "6894c63190973b5dbe50b13b3f7a99dd5770e143699f3aae1650fb65ca3ebe9b"
+    },
     "plugins/notifications/Service.qml": {
         "11665542e70df80ccd3c785a6143dee2daefd2082e4f75c740adc2c9947cf7c2"
     },
@@ -34,7 +37,10 @@ def _replace(path: Path, old: str, new: str) -> None:
 
 def install(shell: Path, templates: Path) -> None:
     validate_sources(shell)
-    for name in ("OlioHostedWidgets.js", "OlioHostedBarWidget.qml"):
+    for name in (
+        "OlioHostedWidgets.js", "OlioHostedBarWidget.qml", "ArtworkInfo.qml",
+        "ArtworkInfoIcon.svg",
+    ):
         shutil.copy2(templates / name, shell / "services" / name)
     legacy_source_dir_filter = "    delete copy.__sourceDir\n"
     if legacy_source_dir_filter in (shell / "shell.qml").read_text():
@@ -42,6 +48,8 @@ def install(shell: Path, templates: Path) -> None:
                  "    // Preserve bundled script discovery for third-party plugins.\n")
     _replace(shell / "shell.qml", 'import "services"\n',
              'import "services"\nimport "services/OlioHostedWidgets.js" as OlioHostedWidgets\n')
+    _replace(shell / "shell.qml", "ShellRoot {\n  id: shell\n",
+             "ShellRoot {\n  id: shell\n\n  ArtworkInfo { }\n")
     marker = "      _barEntryShellLookup: function(ownerId, moduleName) {\n"
     _replace(shell / "shell.qml", marker,
              "      _createBarWidget: function(moduleName, parent, barApi) {\n"
@@ -55,6 +63,10 @@ def install(shell: Path, templates: Path) -> None:
              "  function createBarWidget(moduleName, parent, barApi) {\n"
              "    return _createBarWidget ? _createBarWidget(moduleName, parent, barApi) : null\n"
              "  }\n\n  function serviceFor(id) {\n")
+    util = shell / "Commons" / "Util.qml"
+    _replace(util, '["bash", "-lc", command]', '["bash", "-c", command]')
+    _replace(util, '["bash", "-lc", \'exec "$@"\', "bash"]',
+             '["bash", "-c", \'exec "$@"\', "bash"]')
     _replace(shell / "plugins/notifications/Service.qml",
              "      readonly property var popupPlacement: NotificationLogic.popupPlacement(\n"
              "        service.barPosition, service.barClearance, Style.gapsOut)",

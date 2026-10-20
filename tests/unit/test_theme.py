@@ -18,6 +18,7 @@ from omarchy_setup.modules.theme.core import (
     configure_theme,
     restore_theme,
     theme_status,
+    _validate_background_metadata,
     _validate_theme_toml,
     _resolve_palette_references,
 )
@@ -90,10 +91,15 @@ class ThemeTests(unittest.TestCase):
         host_files = {
             "shell.qml": (
                 'import "services"\n'
+                "ShellRoot {\n  id: shell\n"
                 "    delete copy.__sourceDir\n"
                 "      _barEntryShellLookup: function(ownerId, moduleName) {\n"
             ),
             "services/PluginShellApi.qml": "  property var _barEntryShellLookup: null\n  function serviceFor(id) {\n",
+            "Commons/Util.qml": (
+                'Quickshell.execDetached(["bash", "-lc", command])\n'
+                'Quickshell.execDetached(["bash", "-lc", \'exec "$@"\', "bash"].concat(argv))\n'
+            ),
             "plugins/notifications/Service.qml": (
                 "      readonly property var popupPlacement: NotificationLogic.popupPlacement(\n"
                 "        service.barPosition, service.barClearance, Style.gapsOut)"
@@ -163,6 +169,21 @@ class ThemeTests(unittest.TestCase):
             check=False,
         )
 
+    def test_shell_shutdown_waits_until_the_old_instance_exits(self) -> None:
+        root = Path("/tmp/old-omarchy")
+        running = subprocess.CompletedProcess((), 0, stdout=(
+            f"  Config path: {root}/shell/shell.qml\n"
+        ), stderr="")
+        stopped = subprocess.CompletedProcess((), 0, stdout="", stderr="")
+        with patch(
+            "omarchy_setup.modules.theme.core.subprocess.run",
+            side_effect=(subprocess.CompletedProcess((), 0), running, stopped),
+        ) as run, patch("omarchy_setup.modules.theme.core.time.sleep") as sleep:
+            OmarchyThemeBackend._kill_shell(root)
+
+        self.assertEqual(run.call_count, 3)
+        sleep.assert_called_once_with(0.1)
+
     def test_maintenance_uses_installed_root_and_preserves_arguments_and_status(self) -> None:
         system_bin = self.paths.system_omarchy / "bin"
         system_bin.mkdir()
@@ -193,6 +214,29 @@ class ThemeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ThemeError, "invalid theme TOML"):
             _validate_theme_toml(invalid)
+
+    def test_backgrounds_require_matching_valid_metadata(self) -> None:
+        backgrounds = self.paths.state_root / "backgrounds"
+        backgrounds.mkdir(parents=True)
+        (backgrounds / "painting.jpg").write_bytes(b"image")
+        with self.assertRaisesRegex(ThemeError, "metadata is missing"):
+            _validate_background_metadata(backgrounds)
+
+        (backgrounds / "painting.json").write_text(
+            __import__("json").dumps({
+                "schema_version": 1,
+                "title": "Painting",
+                "artist": "Artist",
+                "date": "1900",
+                "medium": "Oil on canvas",
+                "collection": "Collection",
+                "source_name": "Museum",
+                "source_url": "https://example.test/painting",
+                "rights": "Public domain",
+                "identification": "verified",
+            })
+        )
+        _validate_background_metadata(backgrounds)
 
     def test_shell_palette_references_are_resolved_and_validated(self) -> None:
         rendered = _resolve_palette_references(
@@ -270,7 +314,13 @@ class ThemeTests(unittest.TestCase):
         host = (overlay / "shell.qml").read_text()
         self.assertIn("hasCurrentBarCapabilities()", host)
         self.assertIn("OlioHostedWidgets.create(shell, key, moduleName, parent, barApi)", host)
+        self.assertIn("ArtworkInfo { }", host)
+        self.assertTrue((overlay / "services" / "ArtworkInfo.qml").is_file())
+        self.assertTrue((overlay / "services" / "ArtworkInfoIcon.svg").is_file())
         self.assertNotIn("delete copy.__sourceDir", host)
+        util = (overlay / "Commons" / "Util.qml").read_text()
+        self.assertNotIn('"-lc"', util)
+        self.assertIn('["bash", "-c", command]', util)
         service = (overlay / "plugins/notifications/Service.qml").read_text()
         self.assertIn("notificationPlacement !== undefined", service)
         self.assertIn(": NotificationLogic.popupPlacement(", service)

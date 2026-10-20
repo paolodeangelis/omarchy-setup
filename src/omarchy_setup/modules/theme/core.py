@@ -42,6 +42,35 @@ def _validate_theme_toml(path: Path) -> None:
         raise ThemeError(f"invalid theme TOML {path}: {error}") from error
 
 
+def _validate_background_metadata(backgrounds: Path) -> None:
+    if not backgrounds.is_dir():
+        raise ThemeError(f"theme backgrounds directory is missing: {backgrounds}")
+    image_extensions = {".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+    images = {path.stem: path for path in backgrounds.iterdir() if path.suffix.lower() in image_extensions}
+    metadata = {path.stem: path for path in backgrounds.glob("*.json")}
+    if missing := sorted(images.keys() - metadata.keys()):
+        raise ThemeError(f"background metadata is missing for: {', '.join(missing)}")
+    if orphaned := sorted(metadata.keys() - images.keys()):
+        raise ThemeError(f"background image is missing for metadata: {', '.join(orphaned)}")
+
+    required = {
+        "title", "artist", "date", "medium", "collection", "source_name",
+        "source_url", "rights", "identification",
+    }
+    for path in sorted(metadata.values()):
+        try:
+            record = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise ThemeError(f"invalid background metadata {path}: {error}") from error
+        if not isinstance(record, dict) or record.get("schema_version") != 1:
+            raise ThemeError(f"background metadata {path} must use schema_version 1")
+        missing = sorted(key for key in required if not isinstance(record.get(key), str) or not record[key].strip())
+        if missing:
+            raise ThemeError(f"background metadata {path} has empty fields: {', '.join(missing)}")
+        if record["identification"] not in {"verified", "unverified"}:
+            raise ThemeError(f"background metadata {path} has invalid identification status")
+
+
 def _toml_literal(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -343,6 +372,8 @@ class OmarchyThemeBackend:
         _run((str(qmllint), "-I", str(overlay_shell), str(keyboard_panel)))
         _run((str(qmllint), "-I", str(overlay_shell),
               str(overlay_shell / "services" / "OlioHostedBarWidget.qml")))
+        _run((str(qmllint), "-I", str(overlay_shell),
+              str(overlay_shell / "services" / "ArtworkInfo.qml")))
         plugin = overlay_shell / "Caelestia" / "Blobs" / "libcaelestia-blobsplugin.so"
         dependencies = _run(("ldd", str(plugin)))
         if "not found" in dependencies:
@@ -406,6 +437,18 @@ class OmarchyThemeBackend:
             capture_output=True,
             check=False,
         )
+        marker = f"Config path: {root / 'shell' / 'shell.qml'}"
+        for _ in range(50):
+            instances = subprocess.run(
+                ("quickshell", "list", "--all"),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if marker not in instances.stdout:
+                return
+            time.sleep(0.1)
+        raise ThemeError(f"Omarchy shell did not stop: {root}")
 
     @staticmethod
     def _launch_shell(target_root: Path) -> None:
@@ -887,6 +930,7 @@ def configure_theme(
         _validate_theme_toml(shell_theme_config)
     if fixed_shell_theme_config.is_file():
         _validate_theme_toml(fixed_shell_theme_config)
+    _validate_background_metadata(paths.theme_assets / "backgrounds")
     if not paths.bar_plugin_source.joinpath("manifest.json").is_file():
         raise ThemeError(f"olio.bar source is incomplete: {paths.bar_plugin_source}")
     if not paths.hypr_looknfeel_source.is_file():
