@@ -21,6 +21,8 @@ HYPR_START = "-- >>> omarchy-setup window-close >>>"
 HYPR_END = "-- <<< omarchy-setup window-close <<<"
 BASH_START = "# >>> omarchy-setup aliases >>>"
 BASH_END = "# <<< omarchy-setup aliases <<<"
+ALIAS_START = "# >>> omarchy-setup shortcuts >>>"
+ALIAS_END = "# <<< omarchy-setup shortcuts <<<"
 
 PLUGINS = (
     (
@@ -155,7 +157,13 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
         paths.bashrc.write_text(
             _replace_block(paths.bashrc.read_text(), BASH_START, BASH_END, bash_block)
         )
-        shutil.copyfile(paths.aliases_source, paths.aliases)
+        alias_block = (
+            f"{ALIAS_START}\n{paths.aliases_source.read_text().rstrip()}\n{ALIAS_END}"
+        )
+        existing_aliases = paths.aliases.read_text() if paths.aliases.exists() else ""
+        paths.aliases.write_text(
+            _replace_block(existing_aliases, ALIAS_START, ALIAS_END, alias_block)
+        )
 
     def verify(self, paths: DotfilesPaths) -> None:
         tmux = paths.tmux_config.read_text()
@@ -167,8 +175,12 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
             raise DotfilesError("Hyprland keybinding overrides could not be verified")
         if bashrc.count(BASH_START) != 1 or bashrc.count(BASH_END) != 1:
             raise DotfilesError("shell aliases block could not be verified")
-        if paths.aliases.read_bytes() != paths.aliases_source.read_bytes():
+        aliases = paths.aliases.read_text()
+        if aliases.count(ALIAS_START) != 1 or aliases.count(ALIAS_END) != 1:
             raise DotfilesError("shell aliases file could not be verified")
+        for line in paths.aliases_source.read_text().splitlines():
+            if line and line not in aliases:
+                raise DotfilesError("managed shell alias is missing")
         for name, _, revision in PLUGINS:
             result = subprocess.run(
                 ("git", "-C", str(paths.plugin_root / name), "rev-parse", "HEAD"),

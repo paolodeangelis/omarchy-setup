@@ -18,8 +18,12 @@ class UpgradeStatus:
     state: str = "unknown"
 
     @property
-    def selectable(self) -> bool:
+    def automatic(self) -> bool:
         return self.installed and self.program.upgrade_policy in {"flatpak", "system"}
+
+    @property
+    def selectable(self) -> bool:
+        return self.automatic and self.state == "update"
 
 
 class UpgradeBackend(Protocol):
@@ -139,21 +143,16 @@ class OmarchyUpgradeBackend:
 
             if program.packages:
                 installed = all(package in installed_versions for package in program.packages)
-                updates = [
-                    (package, *package_updates[package])
-                    for package in program.packages if package in package_updates
-                ]
-                current = ", ".join(
-                    f"{package} {installed_versions[package]}"
-                    for package in program.packages if package in installed_versions
-                ) or "unknown"
-                candidate = ", ".join(f"{package} {new}" for package, _, new in updates) or "—"
+                primary = program.packages[0]
+                update = package_updates.get(primary)
+                current = installed_versions.get(primary, "unknown")
+                candidate = update[1] if update else "—"
                 check_known = (
                     pacman_check_known if program.source == "Pacman"
                     else aur_check_known if program.source == "AUR"
                     else pacman_check_known and aur_check_known
                 )
-                state = "update" if updates else "current" if check_known else "unknown"
+                state = "update" if update else "current" if check_known else "unknown"
                 statuses.append(UpgradeStatus(
                     program, installed, current, candidate,
                     "absent" if not installed else state,
@@ -176,28 +175,40 @@ class OmarchyUpgradeBackend:
         self.programs._run(command, capture=False)
 
 
-def _status_line(status: UpgradeStatus, *, show_source: bool) -> str:
-    update = (
-        f"{status.current} → {status.candidate}"
-        if status.state == "update"
-        else f"{status.current} ({status.state})"
-    )
-    line = f"{status.program.name:<16} {update}"
-    if show_source:
-        details = status.program.flatpak_id or ", ".join(status.program.packages) or "—"
-        line += f"\n  source: {status.program.source}; id/packages: {details}"
-    return line
+def _source_name(program: Program) -> str:
+    return {
+        "Pinned Miniforge": "manual",
+        "Pinned Git/image": "manual",
+        "Omarchy system packages": "omarchy",
+        "Pacman": "pacman",
+        "AUR": "aur",
+        "Flatpak/Flathub": "flatpak",
+        "Omarchy web app": "webapp",
+    }.get(program.source, program.source.casefold())
 
 
 def format_upgrade_status(statuses: Sequence[UpgradeStatus], *, show_source: bool) -> str:
-    installed = [status for status in statuses if status.installed]
+    installed = [status for status in statuses if status.automatic]
     if not installed:
-        return "No selected managed programs are installed."
-    return "\n".join(_status_line(status, show_source=show_source) for status in installed)
+        return "No automatically upgradable managed programs are installed."
+    columns = [("PROGRAM", 16), ("INSTALLED", 22), ("AVAILABLE", 22)]
+    if show_source:
+        columns.append(("SOURCE", 10))
+    header = "  ".join(label.ljust(width) for label, width in columns).rstrip()
+    rows = [header, "  ".join("-" * width for _, width in columns).rstrip()]
+    for status in installed:
+        available = status.candidate if status.state == "update" else status.state
+        values = [status.program.name, status.current, available]
+        if show_source:
+            values.append(_source_name(status.program))
+        rows.append(
+            "  ".join(value[:width].ljust(width) for value, (_, width) in zip(values, columns)).rstrip()
+        )
+    return "\n".join(rows)
 
 
 def _curses_selector(screen, statuses: Sequence[UpgradeStatus]) -> list[str]:
-    items = [status for status in statuses if status.installed]
+    items = [status for status in statuses if status.selectable]
     if not items:
         return []
     selected: set[str] = set()
@@ -214,13 +225,13 @@ def _curses_selector(screen, statuses: Sequence[UpgradeStatus]) -> list[str]:
         start = max(0, min(cursor - visible + 1, len(items) - visible))
         for row, status in enumerate(items[start : start + visible], start=1):
             index = start + row - 1
-            enabled = status.selectable
             marker = "x" if status.program.name in selected else " "
             pointer = ">" if index == cursor else " "
-            text = f"{pointer} [{marker}] {status.program.label}  {status.program.source}  {status.state}"
+            text = (
+                f"{pointer} [{marker}] {status.program.name}  "
+                f"{status.current} -> {status.candidate}"
+            )
             screen.addnstr(row, 0, text, max(1, width - 1), curses.A_REVERSE if index == cursor else 0)
-            if not enabled:
-                screen.addnstr(row, min(len(text) + 1, width - 1), "(not automatic)", max(1, width - len(text) - 2))
         screen.addnstr(height - 1, 0, "↑/↓ navigate  Space select  Enter continue  Q cancel", max(1, width - 1))
         key = screen.getch()
         if key in (ord("q"), ord("Q"), 27):
@@ -229,7 +240,7 @@ def _curses_selector(screen, statuses: Sequence[UpgradeStatus]) -> list[str]:
             cursor = (cursor - 1) % len(items)
         elif key in (curses.KEY_DOWN, ord("j")):
             cursor = (cursor + 1) % len(items)
-        elif key == ord(" ") and items[cursor].selectable:
+        elif key == ord(" "):
             name = items[cursor].program.name
             selected.symmetric_difference_update({name})
         elif key in (10, 13, curses.KEY_ENTER):
@@ -270,7 +281,7 @@ def run_upgrade(
             raise ProgramError("upgrade without a target requires an interactive terminal")
         selected_names = selector(statuses)
     else:
-        selected_names = [status.program.name for status in statuses if status.selectable]
+        selected_names = [status.program.name for status in statuses if status.automatic]
 
     selected = [status for status in statuses if status.program.name in selected_names]
     if not selected:
@@ -296,5 +307,16 @@ def run_upgrade(
     verified = backend.inspect([status.program for status in selected], paths)
     if any(not status.installed for status in verified):
         raise ProgramError("an upgraded program is no longer detected as installed")
-    print("Upgrade command completed; installed programs were rechecked.", file=stdout)
+    verified_by_name = {status.program.name: status for status in verified}
+    unresolved = [
+        status.program.name
+        for status in selected
+        if status.state == "update"
+        and verified_by_name[status.program.name].state != "current"
+    ]
+    if unresolved:
+        raise ProgramError(
+            "available update still detected after upgrade: " + ", ".join(unresolved)
+        )
+    print("Upgrade completed and selected program versions were rechecked.", file=stdout)
     return 0

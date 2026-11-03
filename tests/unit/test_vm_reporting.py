@@ -40,6 +40,41 @@ class ReportTests(unittest.TestCase):
             self.assertEqual([(r['name'], r['status'], r['exit_code']) for r in records],
                              [('first', 'PASS', 0), ('second', 'FAIL', 23)])
 
+    def test_plugin_step_records_failure_and_continues_to_core_checks(self):
+        source = (Path(__file__).parents[1] / 'vm/guest.sh').read_text()
+        functions = source.split("CURRENT_STEP=''", 1)[1].split('cleanup() {', 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            script = ('set -euo pipefail\nARTIFACTS=$1\nMODE=pinned\nPHASE=initial\n'
+                      "CURRENT_STEP=''\nPLUGIN_FAILURES=0\n" + functions +
+                      "\nplugin_step plugin bash -c 'exit 7'\nstep core true\n")
+            result = subprocess.run(['bash', '-c', script, 'fixture', directory], capture_output=True)
+            self.assertEqual(result.returncode, 0)
+            records = [json.loads(line) for line in
+                       (Path(directory) / 'results-initial.jsonl').read_text().splitlines()]
+            self.assertEqual([(r['name'], r['status']) for r in records],
+                             [('plugin', 'FAIL'), ('core', 'PASS')])
+
+    def test_upgrade_plugin_failure_is_deferred_until_post_upgrade(self):
+        source = (Path(__file__).parents[1] / 'vm/guest.sh').read_text()
+        final_gate = source.split("if jq -s -e 'any", 1)[1].split('echo "PASS:', 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory)
+            row = dict(target='upgrade', phase='initial', category='plugin',
+                       name='Managed plugins', status='FAIL', seconds=1, exit_code=1)
+            (artifacts / 'results-initial.jsonl').write_text(json.dumps(row) + '\n')
+            check = ("set -euo pipefail\nMODE=$1\nPHASE=$2\nARTIFACTS=$3\n"
+                     "CURRENT_CATEGORY=core\nif jq -s -e 'any" + final_gate)
+            initial = subprocess.run(
+                ['bash', '-c', check, 'fixture', 'upgrade', 'initial', directory],
+                capture_output=True,
+            )
+            final = subprocess.run(
+                ['bash', '-c', check, 'fixture', 'upgrade', 'post-upgrade', directory],
+                capture_output=True,
+            )
+            self.assertEqual(initial.returncode, 0)
+            self.assertEqual(final.returncode, 1)
+
     def test_late_failure_keeps_prior_pass_and_reports_missing_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -53,6 +88,20 @@ class ReportTests(unittest.TestCase):
             self.assertIn('Update | FAIL', report)
             self.assertIn('exit 124', report)
             self.assertIn('UNVERIFIED', report)
+
+    def test_report_separates_plugin_failures_from_core_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = [
+                dict(target='pinned', phase='initial', category='plugin', name='Plugin rendering: demo', status='FAIL', seconds=1, exit_code=1),
+                dict(target='pinned', phase='initial', category='core', name='Package verification', status='PASS', seconds=2, exit_code=0),
+            ]
+            (root / 'results-initial.jsonl').write_text('\n'.join(map(json.dumps, rows)))
+
+            report = render(root, {})
+
+            self.assertIn('Moving third-party plugin failures: 1', report)
+            self.assertNotIn('Core utility/system failures:', report)
 
     def test_no_artifacts_never_claims_guest_success(self):
         with tempfile.TemporaryDirectory() as directory:

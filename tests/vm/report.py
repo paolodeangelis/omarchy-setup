@@ -34,6 +34,7 @@ def render(root, environment):
                 row = json.loads(line)
                 for key in ("target", "phase", "name", "status", "seconds", "exit_code"):
                     row[key]
+                row.setdefault("category", "core")
                 records.append(row)
             except (ValueError, KeyError, TypeError):
                 problems.append(f"Unreadable result: {path.name}:{number}")
@@ -45,16 +46,20 @@ def render(root, environment):
     failures = [row for row in records if row["status"] != "PASS"]
     if failures:
         lines += ["", "### Failures", ""]
-        for row in failures:
-            lines.append(f"- **{cell(row['target'])}/{cell(row['phase'])}: {cell(row['name'])}** "
-                         f"— exit {cell(row['exit_code'])}, {cell(row['seconds'])}s. See guest.log/update.log in diagnostics.")
+        for category, title in (("core", "Core utility/system"), ("plugin", "Moving third-party plugin")):
+            selected = [row for row in failures if row["category"] == category]
+            if selected:
+                lines.append(f"- **{title} failures: {len(selected)}**")
+                for row in selected:
+                    lines.append(f"  - {cell(row['target'])}/{cell(row['phase'])}: {cell(row['name'])} "
+                                 f"— exit {cell(row['exit_code'])}, {cell(row['seconds'])}s.")
     if not records:
         lines += ["", "**No acceptance records available. Inspect job logs; no guest checks can be certified.**"]
     lines += ["", "<details><summary>All recorded acceptance checks</summary>", "",
-              "| Target | Phase | Check | Result | Seconds | Exit |", "|---|---|---|---|---:|---:|"]
+              "| Target | Phase | Category | Check | Result | Seconds | Exit |", "|---|---|---|---|---|---:|---:|"]
     for row in records:
         lines.append("| " + " | ".join(cell(row[k]) for k in
-                     ("target", "phase", "name", "status", "seconds", "exit_code")) + " |")
+                     ("target", "phase", "category", "name", "status", "seconds", "exit_code")) + " |")
     lines += ["", "</details>", "", "## Warnings and coverage gaps", ""]
     for problem in problems:
         lines.append(f"- {cell(problem)}")

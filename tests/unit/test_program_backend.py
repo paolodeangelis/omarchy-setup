@@ -51,7 +51,7 @@ class ProgramBackendTests(unittest.TestCase):
 
         self.assertEqual(
             run.call_args_list[1].args[0],
-            ("sudo", "pacman", "-Sy", "--noconfirm"),
+            ("omarchy", "update", "-y"),
         )
 
     def test_mamba_shell_block_is_idempotent_and_disables_prompt_clobbering(self) -> None:

@@ -10,7 +10,9 @@ from omarchy_setup.modules.dotfiles import (
     OmarchyDotfilesBackend,
     run_dotfiles,
 )
-from omarchy_setup.modules.dotfiles.core import BASH_START, HYPR_START, TMUX_START, _replace_block
+from omarchy_setup.modules.dotfiles.core import (
+    ALIAS_START, BASH_START, HYPR_START, TMUX_START, _replace_block,
+)
 
 
 class FakeBackend:
@@ -52,6 +54,7 @@ class DotfilesTests(unittest.TestCase):
             paths.tmux_config.write_text("set -g mouse on\n")
             paths.hypr_bindings.write_text("-- personal\n")
             paths.bashrc.write_text("# personal\n")
+            paths.aliases.write_text("alias personal='echo kept'\n")
             paths.aliases_source.write_text("alias vim='nvim'\n")
             backend = OmarchyDotfilesBackend()
 
@@ -72,7 +75,9 @@ class DotfilesTests(unittest.TestCase):
             self.assertIn('o.bind("SUPER + Q", "Close window"', first_hypr)
             self.assertIn("# personal", first_bashrc)
             self.assertEqual(first_bashrc.count(BASH_START), 1)
-            self.assertEqual(paths.aliases.read_text(), "alias vim='nvim'\n")
+            self.assertIn("alias personal='echo kept'", paths.aliases.read_text())
+            self.assertIn("alias vim='nvim'", paths.aliases.read_text())
+            self.assertEqual(paths.aliases.read_text().count(ALIAS_START), 1)
 
     def test_dry_run_only_checks(self) -> None:
         backend = FakeBackend()

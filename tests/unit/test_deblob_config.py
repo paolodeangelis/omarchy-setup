@@ -3,8 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, call, patch
 
-from omarchy_setup.modules.deblob import DeblobError, load_config
+from omarchy_setup.modules.deblob import DeblobError, OmarchyBackend, load_config
 
 
 class DeblobConfigTests(unittest.TestCase):
@@ -44,6 +45,24 @@ class DeblobConfigTests(unittest.TestCase):
 
         with self.assertRaisesRegex(DeblobError, "both removed and protected"):
             load_config(path)
+
+    def test_mail_fallback_is_verified_before_webapp_removal(self) -> None:
+        backend = OmarchyBackend()
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                Mock(stdout=""),
+                Mock(stdout="thunderbird.desktop\n"),
+                Mock(stdout=""),
+            ]
+            backend.remove_webapps(
+                ["HEY"], mailto_fallback="thunderbird.desktop"
+            )
+
+        self.assertEqual(run.call_args_list, [
+            call(("xdg-mime", "default", "thunderbird.desktop", "x-scheme-handler/mailto")),
+            call(("xdg-mime", "query", "default", "x-scheme-handler/mailto")),
+            call(("omarchy", "webapp", "remove", "HEY")),
+        ])
 
     def test_rejects_invalid_package_names(self) -> None:
         path = self.write_config(

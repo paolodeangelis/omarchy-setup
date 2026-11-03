@@ -161,15 +161,15 @@ class OmarchyBackend:
         return {path.stem for path in applications.glob("*.desktop") if path.is_file()}
 
     def remove_webapps(self, names: Sequence[str], *, mailto_fallback: str | None) -> None:
-        for name in names:
-            self._run(("omarchy", "webapp", "remove", name))
         if mailto_fallback is not None:
             self._run(("xdg-mime", "default", mailto_fallback, "x-scheme-handler/mailto"))
             selected = self._run(
                 ("xdg-mime", "query", "default", "x-scheme-handler/mailto")
             ).stdout.strip()
             if selected != mailto_fallback:
-                raise DeblobError("could not replace the removed default mail handler")
+                raise DeblobError("could not establish the replacement mail handler")
+        for name in names:
+            self._run(("omarchy", "webapp", "remove", name))
 
     def acquire_privileges(self) -> None:
         if os.geteuid() == 0:

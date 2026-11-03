@@ -62,9 +62,19 @@ class FakeUpgradeBackend:
 
     def upgrade_flatpaks(self, app_ids):
         self.flatpak_calls.append(tuple(app_ids))
+        for status in self.statuses.values():
+            if status.program.flatpak_id in app_ids and status.state == "update":
+                self.statuses[status.program.name] = UpgradeStatus(
+                    status.program, True, status.candidate, "—", "current"
+                )
 
     def upgrade_system(self, *, assume_yes):
         self.system_calls.append(assume_yes)
+        for name, status in tuple(self.statuses.items()):
+            if status.program.upgrade_policy == "system" and status.state == "update":
+                self.statuses[name] = UpgradeStatus(
+                    status.program, True, status.candidate, "—", "current"
+                )
 
 
 class ProgramUpgradeTests(unittest.TestCase):
@@ -91,8 +101,10 @@ class ProgramUpgradeTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(backend.flatpak_calls, [])
         self.assertEqual(backend.system_calls, [])
-        self.assertIn("2.1 → 2.2", output.getvalue())
-        self.assertIn("app.bluebubbles.BlueBubbles", output.getvalue())
+        self.assertIn("bluebubbles", output.getvalue())
+        self.assertIn("2.1", output.getvalue())
+        self.assertIn("2.2", output.getvalue())
+        self.assertIn("flatpak", output.getvalue())
 
     def test_single_flatpak_upgrade_and_verification(self) -> None:
         backend = FakeUpgradeBackend([
@@ -106,6 +118,19 @@ class ProgramUpgradeTests(unittest.TestCase):
 
         self.assertEqual(backend.flatpak_calls, [("app.bluebubbles.BlueBubbles",)])
         self.assertEqual(backend.system_calls, [])
+
+    def test_known_update_must_disappear_after_upgrade(self) -> None:
+        backend = FakeUpgradeBackend([
+            UpgradeStatus(program("bluebubbles"), True, "2.1", "2.2", "update")
+        ])
+        backend.upgrade_flatpaks = lambda app_ids: None
+
+        with self.assertRaisesRegex(ProgramError, "still detected"):
+            run_upgrade(
+                "bluebubbles", paths=self.paths, backend=backend, assume_yes=True,
+                check_only=False, show_source=False, stdin=io.StringIO(),
+                stdout=io.StringIO(),
+            )
 
     def test_all_coalesces_system_programs_into_one_omarchy_update(self) -> None:
         statuses = []
@@ -179,8 +204,34 @@ class ProgramUpgradeTests(unittest.TestCase):
         self.assertFalse(statuses[0].selectable)
         self.assertFalse(statuses[1].selectable)
         report = format_upgrade_status(statuses, show_source=True)
-        self.assertIn("Pinned Miniforge", report)
-        self.assertIn("Omarchy web app", report)
+        self.assertIn("No automatically upgradable", report)
+
+    def test_report_is_a_compact_source_table(self) -> None:
+        report = format_upgrade_status([
+            UpgradeStatus(program("bluebubbles"), True, "2.1", "2.2", "update"),
+            UpgradeStatus(program("mamba"), True, "unknown", "unknown", "manual"),
+        ], show_source=True)
+
+        self.assertIn("PROGRAM", report)
+        self.assertIn("INSTALLED", report)
+        self.assertIn("AVAILABLE", report)
+        self.assertIn("SOURCE", report)
+        self.assertIn("bluebubbles", report)
+        self.assertIn("2.1", report)
+        self.assertIn("2.2", report)
+        self.assertNotIn("app.bluebubbles.BlueBubbles", report)
+        self.assertNotIn("mamba", report)
+
+    @patch("omarchy_setup.modules.programs.upgrade.curses.curs_set")
+    def test_selector_hides_installed_programs_without_known_updates(self, _cursor) -> None:
+        statuses = [
+            UpgradeStatus(program("bluebubbles"), True, "2.1", "2.2", "update"),
+            UpgradeStatus(program("spotify"), True, "1.0", "—", "current"),
+            UpgradeStatus(program("mamba"), True, state="manual"),
+        ]
+        screen = FakeScreen([ord(" "), 10])
+
+        self.assertEqual(_curses_selector(screen, statuses), ["bluebubbles"])
 
     def test_concrete_backend_uses_supported_update_commands(self) -> None:
         backend = OmarchyUpgradeBackend()

@@ -172,15 +172,18 @@ Check installed versions and their package sources without changing anything:
 omarchy-setup upgrade all --check --source
 ```
 
-Run `omarchy-setup upgrade` with no target for an interactive terminal list:
-use the arrow keys to move, Space to toggle `[ ]`/`[x]`, Enter to continue,
-and Q to cancel. A named Flatpak is updated independently. Selecting any
+The report is a compact table of automatically upgradable installed programs,
+their installed/available versions, and optionally their source. Run
+`omarchy-setup upgrade` with no target for a list containing only programs with
+a known update: use the arrow keys to move, Space to toggle `[ ]`/`[x]`, Enter
+to continue, and Q to cancel. A named Flatpak is updated independently. Selecting any
 Pacman, AUR, or Omarchy-managed package runs the supported full
 `omarchy update` once, because partial Arch upgrades are unsupported. That
 updater owns its normal Snapper checkpoint and sudo prompts; `-y` suppresses
 ordinary confirmations but does not bypass either privilege or safety checks.
-Manual sources such as WinApps and Miniforge are reported but not upgraded
-automatically. Network checks time out after 30 seconds and report `unknown`
+Manual sources such as WinApps and Miniforge and payload-free web apps are
+omitted because they cannot be upgraded by this command. Network checks time
+out after 30 seconds and report `unknown`
 instead of claiming that an unverified package is current.
 
 ## Dotfiles

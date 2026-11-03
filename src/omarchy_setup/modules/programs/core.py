@@ -471,7 +471,9 @@ class OmarchyProgramBackend:
         # require an actual package listing rather than trusting status alone.
         if probe.returncode == 0 and probe.stdout.strip():
             return
-        self._run(("sudo", "pacman", "-Sy", "--noconfirm"), capture=False)
+        # Refresh through Omarchy's complete updater; `pacman -Sy` followed by
+        # selected installs would create an unsupported partial Arch upgrade.
+        self._run(("omarchy", "update", "-y"), capture=False)
         verify = subprocess.run(
             ("pacman", "-Sl", "core"),
             text=True,
@@ -998,7 +1000,7 @@ def run_install(
         return 0
 
     has_configuration = not install_only and any(
-        program.kind == "zen" for program in programs
+        program.kind in {"zen", "thunderbird"} for program in programs
     )
     has_actions = bool(missing) or has_configuration or (
         not install_only and (login or set_defaults)

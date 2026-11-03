@@ -18,14 +18,17 @@ STATE_ROOT="$HOME/.local/state/omarchy-setup"
 UPSTREAM_TESTS=$(cd -- "$SOURCE_ROOT/.." && pwd)
 KEEPALIVE=''
 CURRENT_STEP=''
+CURRENT_CATEGORY=core
 STEP_STARTED=0
 record_step() {
   jq -cn --arg target "$MODE" --arg phase "$PHASE" --arg name "$CURRENT_STEP" \
     --arg status "$1" --argjson exit_code "$2" --argjson seconds "$((SECONDS - STEP_STARTED))" \
-    '{target:$target,phase:$phase,name:$name,status:$status,exit_code:$exit_code,seconds:$seconds}' \
+    --arg category "$CURRENT_CATEGORY" \
+    '{target:$target,phase:$phase,category:$category,name:$name,status:$status,exit_code:$exit_code,seconds:$seconds}' \
     >> "$ARTIFACTS/results-$PHASE.jsonl"
 }
 step() {
+  CURRENT_CATEGORY=core
   CURRENT_STEP=$1
   shift
   STEP_STARTED=$SECONDS
@@ -33,6 +36,35 @@ step() {
   "$@"
   record_step PASS 0
   CURRENT_STEP=''
+}
+plugin_step() {
+  CURRENT_CATEGORY=plugin
+  CURRENT_STEP=$1
+  shift
+  STEP_STARTED=$SECONDS
+  echo "==> [$MODE/$PHASE] $CURRENT_STEP (plugin check; failure deferred)"
+  if "$@"; then
+    record_step PASS 0
+  else
+    local result=$?
+    record_step FAIL "$result"
+  fi
+  CURRENT_STEP=''
+  CURRENT_CATEGORY=core
+}
+record_plugin_results() {
+  local file=$1 plugin status error
+  [[ -s $file ]] || return 0
+  while IFS=$'\t' read -r plugin status error; do
+    [[ $status == PASS ]] && continue
+    CURRENT_STEP="Plugin rendering: $plugin"
+    CURRENT_CATEGORY=plugin
+    STEP_STARTED=$SECONDS
+    echo "Plugin failure deferred: $plugin: $error" >&2
+    record_step FAIL 1
+    CURRENT_STEP=''
+    CURRENT_CATEGORY=core
+  done < <(jq -r '.[] | [.plugin, .status, .error] | @tsv' "$file")
 }
 cleanup() {
   result=$?
@@ -90,8 +122,9 @@ checks() {
   local stage=$1
   session
   mkdir -p "$ARTIFACTS/$stage"
-  "$LAUNCHER" doctor --ui
+  plugin_step "Doctor after plugin integration: $stage" "$LAUNCHER" doctor --ui
   "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage"
+  record_plugin_results "$ARTIFACTS/$stage/plugin-results.json"
   [[ -z $(hyprctl configerrors) ]]
 }
 agent_hooks_configured() {
@@ -155,19 +188,21 @@ if [[ $PHASE == initial ]]; then
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
   step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
+  step 'Managed upgrade source report' "$LAUNCHER" upgrade all --check --source
   step 'Native Zoom integration' zoom_native_configured
   step 'WinApps preparation plan only' "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-before-repeat.txt"
   step 'Repeat program installation' "$LAUNCHER" install all -y -d --no-progress
   pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
   step 'Program package idempotency' cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
-  step 'Managed plugins' "$LAUNCHER" plugin apply -y --no-progress
-  step 'Managed plugin status' "$LAUNCHER" plugin status
+  step 'Core doctor before plugins' "$LAUNCHER" doctor --ui
+  plugin_step 'Managed plugins' "$LAUNCHER" plugin apply -y --no-progress
+  plugin_step 'Managed plugin status' "$LAUNCHER" plugin status
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
     step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
-    step "Agent hook configuration $sequence/$style" agent_hooks_configured
+    plugin_step "Agent hook configuration $sequence/$style" agent_hooks_configured
     step "Desktop checks $sequence/$style" checks "$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
@@ -200,13 +235,13 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   UPSTREAM_TESTS="$UPSTREAM_TESTS/candidate/test"
   authorize
   step 'Desktop after reboot before reapply' checks after-upgrade-before-reapply
-  step 'Managed plugins after upgrade' "$LAUNCHER" plugin apply -y --no-progress
-  step 'Managed plugin status after upgrade' "$LAUNCHER" plugin status
+  plugin_step 'Managed plugins after upgrade' "$LAUNCHER" plugin apply -y --no-progress
+  plugin_step 'Managed plugin status after upgrade' "$LAUNCHER" plugin status
   sequence=0
   for style in fixed floating fixed; do
     sequence=$((sequence + 1))
     step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
-    step "Agent hook configuration $sequence/$style" agent_hooks_configured
+    plugin_step "Agent hook configuration $sequence/$style" agent_hooks_configured
     step "Desktop checks $sequence/$style" checks "after-upgrade-$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before-post-upgrade.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
@@ -222,6 +257,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
   step 'Post-upgrade program installation' "$LAUNCHER" install all -y --no-progress
+  step 'Managed upgrade source report after upgrade' "$LAUNCHER" upgrade all --check --source
   step 'Native Zoom integration after upgrade' zoom_native_configured
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-before-repeat.txt"
   step 'Repeat program installation' "$LAUNCHER" install all -y --no-progress
@@ -235,5 +271,15 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   step 'Guest unit and integration suite after upgrade' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
 else
   echo "Invalid phase/mode $PHASE/$MODE"; exit 1
+fi
+if jq -s -e 'any(.[]; .category == "plugin" and .status == "FAIL")' \
+    "$ARTIFACTS"/results-*.jsonl >/dev/null; then
+  if [[ $MODE == upgrade && $PHASE == initial ]]; then
+    echo 'WARN: plugin failures recorded; continuing to the upgrade and final checks' >&2
+  else
+    echo 'FAIL: core acceptance completed, but one or more plugin checks failed' >&2
+    CURRENT_CATEGORY=plugin
+    exit 1
+  fi
 fi
 echo "PASS: automated subset for $MODE $PHASE; radar preview, Spaces interactions and animation remain unverified"

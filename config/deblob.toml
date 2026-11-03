@@ -15,7 +15,6 @@ remove = [
   "xournalpp",
 
   # Productivity and sharing applications.
-  "libreoffice-fresh",
   "localsend",
   "obsidian",
 

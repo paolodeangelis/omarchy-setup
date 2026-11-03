@@ -87,16 +87,23 @@ def main():
     }, indent=2))
     # Exercise deterministic panel rendering without asserting remote weather,
     # network, Bluetooth, audio, or battery data that a CI guest may not have.
-    for plugin in ("omarchy.weather", "omarchy.bluetooth", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg"):
+    for plugin in ("omarchy.weather", "omarchy.bluetooth", "omarchy.network", "omarchy.audio"):
         capture_panel(output, plugin)
 
-    screenshot = capture_panel(output, "jankeesvw.notification-center", delay=3)
-    text = notification_archive_ocr(screenshot, output)
-    (output / "jankeesvw.notification-center-ocr.txt").write_text(text)
-    # The archive retains one probe per tested theme mode. OCR may misread
-    # the final word ("probe" -> "prove") when multiple cards are visible.
-    if not text_visible(text, "Notification archive integration"):
-        raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")
+    plugin_results = []
+    for plugin in ("crmne.hyprmoncfg", "jankeesvw.notification-center"):
+        try:
+            screenshot = capture_panel(output, plugin, delay=3 if "notification" in plugin else 2)
+            if plugin == "jankeesvw.notification-center":
+                text = notification_archive_ocr(screenshot, output)
+                (output / f"{plugin}-ocr.txt").write_text(text)
+                # OCR may read the final word ("probe" -> "prove").
+                if not text_visible(text, "Notification archive integration"):
+                    raise RuntimeError("notification archive content not visible; inspect screenshot/OCR")
+            plugin_results.append({"plugin": plugin, "status": "PASS", "error": ""})
+        except Exception as error:
+            plugin_results.append({"plugin": plugin, "status": "FAIL", "error": str(error)})
+    (output / "plugin-results.json").write_text(json.dumps(plugin_results, indent=2))
 
     try:
         run("omarchy-menu", "summon", "system")

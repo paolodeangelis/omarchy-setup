@@ -70,6 +70,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         set_defaults: bool = False,
         dry_run: bool = False,
         install_only: bool = False,
+        answer: str = "",
     ) -> tuple[int, str]:
         output = io.StringIO()
         result = run_install(
@@ -81,7 +82,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
             set_defaults=set_defaults,
             dry_run=dry_run,
             quiet=False,
-            stdin=io.StringIO(""),
+            stdin=io.StringIO(answer),
             stdout=output,
             install_only=install_only,
         )
@@ -126,6 +127,17 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         self.assertEqual(backend.package_preparations, 0)
         self.assertEqual(backend.defaults, ["zen"])
         self.assertEqual(backend.logins, ["zen"])
+
+    def test_installed_thunderbird_configuration_still_requires_confirmation(self) -> None:
+        backend = FakeBackend(installed={"thunderbird"})
+
+        result, output = self.execute(
+            "thunderbird", backend, assume_yes=False, answer="no\n"
+        )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(backend.configured, [])
+        self.assertIn("Cancelled", output)
 
     def test_all_with_flags_runs_every_available_hook(self) -> None:
         backend = FakeBackend(

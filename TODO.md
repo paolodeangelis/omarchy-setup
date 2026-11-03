@@ -26,7 +26,7 @@
 - [x] Implement `--install-only`
 - [x] Add explicit single-program uninstall with preserved user data and safe exclusions for Miniforge/WinApps
 - [x] Add source-aware upgrade checks, an interactive selector, independent Flatpak updates, and supported full-system Omarchy updates
-- [ ] Add disposable-VM acceptance for upgrade reporting and delegation; unit tests prove selection/orchestration, not a real package transaction
+- [x] Add disposable-VM acceptance for upgrade source reporting; unit tests prove source-specific delegation without mutating the VM package state
 - [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
 - [x] Add Proton VPN CLI and selectable OmaProton/general VPN bar integrations
 - [x] Add LibreOffice with US English/Italian spelling and US English hyphenation
