@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import hashlib
 import os
 import platform
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Protocol, Sequence, TextIO
 
 from omarchy_setup.progress import ProgressDisplay
+from omarchy_setup.app_config import AppConfigError, load_app_config
 from omarchy_setup.modules.programs.winapps import WinAppsInstaller, WinAppsPaths
 
 
@@ -71,10 +73,13 @@ class Program:
     description: str
     packages: tuple[str, ...]
     install_command: tuple[str, ...]
+    source: str
+    upgrade_policy: str
     uninstall_command: tuple[str, ...] | None = None
     login_command: tuple[str, ...] | None = None
     default_command: tuple[str, ...] | None = None
     desktop_file: str | None = None
+    flatpak_id: str | None = None
     aliases: tuple[str, ...] = ()
     kind: str = "command"
     include_in_all: bool = True
@@ -88,6 +93,8 @@ PROGRAMS = (
         description="Install a pinned Miniforge distribution with conda and mamba.",
         packages=(),
         install_command=(),
+        source="Pinned Miniforge",
+        upgrade_policy="manual",
         aliases=("miniforge",),
         kind="mamba",
     ),
@@ -125,6 +132,8 @@ PROGRAMS = (
             "libnotify",
             "openbsd-netcat",
         ),
+        source="Pinned Git/image",
+        upgrade_policy="manual",
         kind="winapps",
         include_in_all=False,
         onboarding_required=True,
@@ -135,6 +144,8 @@ PROGRAMS = (
         description="Install Zen Browser through Omarchy's supported browser installer.",
         packages=("zen-browser-bin",),
         install_command=("omarchy", "install", "browser", "zen"),
+        source="Omarchy system packages",
+        upgrade_policy="system",
         login_command=("uwsm-app", "--", "zen-browser"),
         default_command=("omarchy", "default", "browser", "zen"),
         aliases=("zen-browser",),
@@ -146,6 +157,8 @@ PROGRAMS = (
         description="Install the 1Password desktop app and CLI through Omarchy.",
         packages=("1password", "1password-cli"),
         install_command=("omarchy", "install", "service", "1password"),
+        source="Omarchy system packages",
+        upgrade_policy="system",
         login_command=("omarchy", "launch", "1password"),
         aliases=("onepassword",),
     ),
@@ -161,6 +174,8 @@ PROGRAMS = (
             "nautilus-dropbox",
         ),
         install_command=("omarchy", "install", "service", "dropbox"),
+        source="Omarchy system packages",
+        upgrade_policy="system",
         login_command=("uwsm-app", "--", "dropbox-cli", "start"),
     ),
     Program(
@@ -169,20 +184,70 @@ PROGRAMS = (
         description="Install Spotify through Omarchy's supported service installer.",
         packages=("spotify",),
         install_command=("omarchy", "install", "service", "spotify"),
+        source="Omarchy system packages",
+        upgrade_policy="system",
         login_command=("omarchy", "launch", "spotify"),
+    ),
+    Program(
+        name="proton-vpn",
+        label="Proton VPN",
+        description="Install Proton VPN's CLI for the managed Omarchy bar plugin.",
+        packages=("proton-vpn-cli",),
+        install_command=("omarchy", "pkg", "add", "proton-vpn-cli"),
+        source="Pacman",
+        upgrade_policy="system",
+        login_command=(
+            "omarchy-launch-floating-terminal-with-presentation",
+            "read -rp 'Proton username: ' u && protonvpn signin \"$u\" || "
+            "{ status=$?; printf '\\nProton sign-in failed; review the error above. Press any key to close...'; "
+            "read -rsn 1; exit \"$status\"; }",
+        ),
+        aliases=("protonvpn",),
     ),
     Program(
         name="libreoffice",
         label="LibreOffice",
         description=(
-            "Install LibreOffice with US English and Italian spell-check dictionaries."
+            "Install LibreOffice with US English and Italian language tools."
         ),
-        packages=("libreoffice-fresh", "hunspell-en_us", "hunspell-it"),
+        packages=("libreoffice-fresh", "hunspell-en_us", "hunspell-it", "hyphen-en"),
         install_command=(
             "omarchy", "pkg", "add",
-            "libreoffice-fresh", "hunspell-en_us", "hunspell-it",
+            "libreoffice-fresh", "hunspell-en_us", "hunspell-it", "hyphen-en",
         ),
+        source="Pacman",
+        upgrade_policy="system",
         aliases=("libre-office",),
+    ),
+    Program(
+        name="onlyoffice",
+        label="ONLYOFFICE Desktop Editors",
+        description="Install the free desktop editors for local office documents.",
+        packages=("onlyoffice-bin",),
+        install_command=("omarchy", "pkg", "aur", "add", "onlyoffice-bin"),
+        source="AUR",
+        upgrade_policy="system",
+        aliases=("onlyoffice-desktop", "onlyoffice-desktopeditors"),
+    ),
+    Program(
+        name="bluebubbles",
+        label="BlueBubbles",
+        description="Install the BlueBubbles Linux client from Flathub.",
+        packages=(),
+        install_command=(
+            "flatpak", "install", "--noninteractive", "flathub",
+            "app.bluebubbles.BlueBubbles",
+        ),
+        source="Flatpak/Flathub",
+        upgrade_policy="flatpak",
+        uninstall_command=(
+            "flatpak", "uninstall", "--noninteractive",
+            "app.bluebubbles.BlueBubbles",
+        ),
+        login_command=("flatpak", "run", "app.bluebubbles.BlueBubbles"),
+        desktop_file="app.bluebubbles.BlueBubbles.desktop",
+        flatpak_id="app.bluebubbles.BlueBubbles",
+        aliases=("blue-bubbles",),
     ),
     Program(
         name="zotero",
@@ -190,7 +255,26 @@ PROGRAMS = (
         description="Install Zotero and open it for account and sync setup.",
         packages=("zotero-bin",),
         install_command=("omarchy", "pkg", "aur", "add", "zotero-bin"),
+        source="AUR",
+        upgrade_policy="system",
         login_command=("uwsm-app", "--", "zotero"),
+    ),
+    Program(
+        name="thunderbird",
+        label="Thunderbird",
+        description="Install Thunderbird with US English and Italian language packs.",
+        packages=("thunderbird", "thunderbird-i18n-en-us", "thunderbird-i18n-it"),
+        install_command=(
+            "omarchy", "pkg", "add",
+            "thunderbird", "thunderbird-i18n-en-us", "thunderbird-i18n-it",
+        ),
+        source="Pacman",
+        upgrade_policy="system",
+        login_command=("uwsm-app", "--", "thunderbird"),
+        default_command=(
+            "xdg-mime", "default", "org.mozilla.Thunderbird.desktop", "x-scheme-handler/mailto",
+        ),
+        kind="thunderbird",
     ),
     Program(
         name="outlook",
@@ -205,6 +289,8 @@ PROGRAMS = (
             "https://outlook.office.com/mail/",
             "application-msoutlook",
         ),
+        source="Omarchy web app",
+        upgrade_policy="none",
         login_command=(
             "omarchy",
             "launch",
@@ -221,6 +307,8 @@ PROGRAMS = (
         description="Install the native Zoom client and handle Zoom meeting links.",
         packages=("zoom",),
         install_command=("omarchy", "pkg", "aur", "add", "zoom"),
+        source="AUR",
+        upgrade_policy="system",
         login_command=("uwsm-app", "--", "zoom"),
         desktop_file="Zoom.desktop",
         kind="zoom-native",
@@ -240,6 +328,8 @@ PROGRAMS = (
             "omarchy-webapp-handler-zoom %u",
             "x-scheme-handler/zoommtg;x-scheme-handler/zoomus",
         ),
+        source="Omarchy web app",
+        upgrade_policy="none",
         login_command=(
             "omarchy",
             "launch",
@@ -263,6 +353,8 @@ PROGRAMS = (
             "https://web.whatsapp.com/",
             "whatsapp",
         ),
+        source="Omarchy web app",
+        upgrade_policy="none",
         login_command=("omarchy", "launch", "webapp", "https://web.whatsapp.com/"),
         desktop_file="WhatsApp.desktop",
         uninstall_command=("omarchy", "webapp", "remove", "WhatsApp"),
@@ -274,6 +366,8 @@ PROGRAMS = (
         description="Install Telegram Desktop through Omarchy's package helper.",
         packages=("telegram-desktop",),
         install_command=("omarchy", "pkg", "add", "telegram-desktop"),
+        source="Pacman",
+        upgrade_policy="system",
         login_command=("uwsm-app", "--", "telegram-desktop"),
     ),
 )
@@ -339,6 +433,16 @@ class OmarchyProgramBackend:
             return WinAppsInstaller(WinAppsPaths.from_program_paths(paths)).is_prepared()
         if program.kind == "zoom-native":
             return self._zoom_native_is_configured(paths)
+        if program.flatpak_id is not None:
+            if shutil.which("flatpak") is None:
+                raise ProgramError(
+                    f"{program.label} requires Flatpak to be installed first"
+                )
+            return subprocess.run(
+                ("flatpak", "info", program.flatpak_id),
+                text=True,
+                capture_output=True,
+            ).returncode == 0
         if program.packages:
             result = subprocess.run(
                 ("pacman", "-Q", "--", *program.packages),
@@ -400,6 +504,9 @@ class OmarchyProgramBackend:
     def configure(self, program: Program, paths: ProgramPaths) -> None:
         if program.kind == "zen":
             _install_zen_binding(paths)
+            _install_zen_profile_config(paths)
+        elif program.kind == "thunderbird":
+            _install_thunderbird_binding(paths)
 
     def uninstall(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
         if program.kind in {"mamba", "winapps"}:
@@ -411,6 +518,14 @@ class OmarchyProgramBackend:
             if selected == "zen":
                 raise ProgramError(
                     "Zen is the default browser; select another default before uninstalling it"
+                )
+        if program.kind == "thunderbird":
+            selected = self._run(
+                ("xdg-mime", "query", "default", "x-scheme-handler/mailto")
+            ).stdout.strip()
+            if selected == "org.mozilla.Thunderbird.desktop":
+                raise ProgramError(
+                    "Thunderbird is the default mail client; select another default before uninstalling it"
                 )
 
         if program.uninstall_command is not None:
@@ -436,6 +551,9 @@ class OmarchyProgramBackend:
 
         if program.kind == "zen":
             _remove_zen_binding(paths)
+            _remove_zen_profile_config(paths)
+        elif program.kind == "thunderbird":
+            _remove_thunderbird_binding(paths)
         elif program.kind == "zoom-native":
             self._remove_zoom_native(paths)
 
@@ -586,6 +704,15 @@ class OmarchyProgramBackend:
     def set_default(self, program: Program) -> None:
         if program.default_command is not None:
             self._run(program.default_command)
+            if program.kind == "thunderbird":
+                selected = self._run(
+                    ("xdg-mime", "query", "default", "x-scheme-handler/mailto")
+                ).stdout.strip()
+                if selected != "org.mozilla.Thunderbird.desktop":
+                    raise ProgramError(
+                        f"Thunderbird default could not be verified; xdg-mime reports {selected!r}"
+                    )
+                return
             selected = self._run(("omarchy", "default", "browser")).stdout.strip()
             if selected != program.name:
                 raise ProgramError(
@@ -631,6 +758,10 @@ MAMBA_BLOCK_START = "# >>> omarchy-setup mamba >>>"
 MAMBA_BLOCK_END = "# <<< omarchy-setup mamba <<<"
 ZEN_BINDING_START = "-- >>> omarchy-setup zen >>>"
 ZEN_BINDING_END = "-- <<< omarchy-setup zen <<<"
+ZEN_PREF_START = "// >>> omarchy-setup zen >>>"
+ZEN_PREF_END = "// <<< omarchy-setup zen <<<"
+MAIL_BINDING_START = "-- >>> omarchy-setup mail"
+MAIL_BINDING_END = "-- <<< omarchy-setup mail"
 
 
 def _shell_quote(value: Path) -> str:
@@ -682,6 +813,25 @@ def _zen_bindings_path(paths: ProgramPaths) -> Path:
     return config_home / "hypr" / "bindings.lua"
 
 
+def _zen_profile_path(paths: ProgramPaths) -> Path | None:
+    config_home = paths.config_home or paths.shell_rc.parent / ".config"
+    root = config_home / "zen"
+    profiles = configparser.ConfigParser()
+    try:
+        profiles.read(root / "profiles.ini")
+    except configparser.Error as error:
+        raise ProgramError(f"could not parse Zen profiles: {error}") from error
+    for section in profiles.sections():
+        if section.startswith("Install") and profiles.has_option(section, "Default"):
+            return root / profiles.get(section, "Default")
+    for section in profiles.sections():
+        if section.startswith("Profile") and profiles.getboolean(
+            section, "Default", fallback=False
+        ):
+            return root / profiles.get(section, "Path")
+    return None
+
+
 def _without_marked_block(contents: str, start: str, end: str) -> str:
     start_at = contents.find(start)
     if start_at < 0:
@@ -698,20 +848,39 @@ def _without_marked_block(contents: str, start: str, end: str) -> str:
 def _install_zen_binding(paths: ProgramPaths) -> None:
     target = _zen_bindings_path(paths)
     try:
+        binding = load_app_config().browser_new_window
         contents = target.read_text() if target.exists() else ""
         contents = _without_marked_block(contents, ZEN_BINDING_START, ZEN_BINDING_END)
         block = (
             f"{ZEN_BINDING_START}\n"
-            '-- Zen syncs normal new windows; blank-window creates an independent empty window.\n'
-            'hl.unbind("SUPER + SHIFT + B")\n'
-            'o.bind("SUPER + SHIFT + B", "Zen (blank window)", '
-            '"uwsm-app -- zen-browser --blank-window about:newtab")\n'
+            '-- Window Sync is disabled in the managed Zen profile, so new windows stay independent.\n'
+            f'hl.unbind("{binding}")\n'
+            f'o.bind("{binding}", "Zen (new window)", '
+            '"uwsm-app -- zen-browser --new-window about:newtab")\n'
             f"{ZEN_BINDING_END}\n"
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(contents.rstrip() + "\n\n" + block if contents.strip() else block)
-    except OSError as error:
+    except (OSError, AppConfigError) as error:
         raise ProgramError(f"could not configure Zen keybinding in {target}: {error}") from error
+
+
+def _install_zen_profile_config(paths: ProgramPaths) -> None:
+    profile = _zen_profile_path(paths)
+    if profile is None:
+        return
+    target = profile / "user.js"
+    try:
+        contents = target.read_text() if target.exists() else ""
+        contents = _without_marked_block(contents, ZEN_PREF_START, ZEN_PREF_END)
+        block = (
+            f"{ZEN_PREF_START}\n"
+            'user_pref("zen.window-sync.enabled", false);\n'
+            f"{ZEN_PREF_END}\n"
+        )
+        target.write_text(contents.rstrip() + "\n\n" + block if contents.strip() else block)
+    except OSError as error:
+        raise ProgramError(f"could not configure Zen profile in {target}: {error}") from error
 
 
 def _remove_zen_binding(paths: ProgramPaths) -> None:
@@ -725,6 +894,56 @@ def _remove_zen_binding(paths: ProgramPaths) -> None:
             target.write_text(updated)
     except OSError as error:
         raise ProgramError(f"could not remove Zen keybinding from {target}: {error}") from error
+
+
+def _remove_zen_profile_config(paths: ProgramPaths) -> None:
+    profile = _zen_profile_path(paths)
+    if profile is None:
+        return
+    target = profile / "user.js"
+    if not target.exists():
+        return
+    try:
+        contents = target.read_text()
+        updated = _without_marked_block(contents, ZEN_PREF_START, ZEN_PREF_END)
+        if updated != contents:
+            target.write_text(updated)
+    except OSError as error:
+        raise ProgramError(f"could not remove Zen profile configuration from {target}: {error}") from error
+
+
+def _install_thunderbird_binding(paths: ProgramPaths) -> None:
+    target = _zen_bindings_path(paths)
+    try:
+        apps = load_app_config()
+        contents = target.read_text() if target.exists() else ""
+        contents = _without_marked_block(contents, MAIL_BINDING_START, MAIL_BINDING_END)
+        block = (
+            f'{MAIL_BINDING_START}\n'
+            f'hl.unbind("{apps.mail_open}")\n'
+            f'hl.unbind("{apps.mail_compose}")\n'
+            f'o.bind("{apps.mail_open}", "Email", "uwsm-app -- thunderbird")\n'
+            f'o.bind("{apps.mail_compose}", "New email", "uwsm-app -- thunderbird -compose")\n'
+            f'{MAIL_BINDING_END}\n'
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(contents.rstrip() + "\n\n" + block if contents.strip() else block)
+    except (OSError, AppConfigError) as error:
+        raise ProgramError(f"could not configure Thunderbird keybindings in {target}: {error}") from error
+
+
+def _remove_thunderbird_binding(paths: ProgramPaths) -> None:
+    target = _zen_bindings_path(paths)
+    if not target.exists():
+        return
+    try:
+        target.write_text(
+            _without_marked_block(
+                target.read_text(), MAIL_BINDING_START, MAIL_BINDING_END
+            )
+        )
+    except OSError as error:
+        raise ProgramError(f"could not remove Thunderbird keybindings from {target}: {error}") from error
 
 
 def _confirm(stdin: TextIO, stdout: TextIO) -> bool:

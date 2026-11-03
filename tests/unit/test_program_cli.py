@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 import io
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from omarchy_setup.cli import build_parser, main
 
@@ -58,6 +59,29 @@ class ProgramCliTests(unittest.TestCase):
         self.assertEqual(args.command, "uninstall")
         self.assertEqual(args.target, "zen")
         self.assertTrue(args.yes)
+
+    def test_upgrade_preserves_target_check_source_and_yes_contract(self) -> None:
+        targeted = build_parser().parse_args(
+            ["upgrade", "bluebubbles", "--check", "--source", "-y"]
+        )
+        interactive = build_parser().parse_args(["upgrade"])
+
+        self.assertEqual(targeted.command, "upgrade")
+        self.assertEqual(targeted.target, "bluebubbles")
+        self.assertTrue(targeted.check_only)
+        self.assertTrue(targeted.source)
+        self.assertTrue(targeted.yes)
+        self.assertIsNone(interactive.target)
+
+    @patch("omarchy_setup.cli.run_upgrade", return_value=0)
+    def test_upgrade_dispatch_preserves_global_yes(self, run_upgrade) -> None:
+        output = io.StringIO()
+
+        self.assertEqual(main(["-y", "upgrade", "all", "--check"], stdout=output), 0)
+
+        self.assertEqual(run_upgrade.call_args.args[0], "all")
+        self.assertTrue(run_upgrade.call_args.kwargs["assume_yes"])
+        self.assertTrue(run_upgrade.call_args.kwargs["check_only"])
 
     def test_dotfiles_supports_automatic_and_dry_run_modes(self) -> None:
         args = build_parser().parse_args(["dotfiles", "-y", "--dry-run"])

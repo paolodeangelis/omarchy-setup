@@ -59,3 +59,9 @@ protected = [
   "xdg-desktop-portal-hyprland",
   "yay",
 ]
+
+[webapps]
+# HEY is an Omarchy web app, not a Pacman package. Keep mailto links usable
+# through the browser until a dedicated mail client is selected.
+remove = ["HEY"]
+mailto_fallback = "zen.desktop"

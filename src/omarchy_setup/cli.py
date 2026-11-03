@@ -33,6 +33,8 @@ from omarchy_setup.modules.programs import (
     format_program_list,
     run_install,
     run_uninstall,
+    OmarchyUpgradeBackend,
+    run_upgrade,
     WinAppsError,
 )
 from omarchy_setup.modules.plugins import (
@@ -182,12 +184,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="show plain stage messages instead of the terminal progress bar",
     )
 
+    upgrade = commands.add_parser(
+        "upgrade", help="check or upgrade managed programs by source"
+    )
+    upgrade.add_argument(
+        "target", nargs="?", metavar="{all,program}",
+        help="program name or 'all'; omit for the interactive selector",
+    )
+    upgrade.add_argument(
+        "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
+        help="accept the upgrade plan; sudo and compatibility checks still apply",
+    )
+    upgrade.add_argument(
+        "--check", dest="check_only", action="store_true",
+        help="only report installed versions and available updates",
+    )
+    upgrade.add_argument(
+        "--source", action="store_true",
+        help="show package source and identifiers",
+    )
+
     plugin = commands.add_parser(
         "plugin", help="manage third-party Omarchy shell plugins and their bar placement"
     )
     plugin_actions = plugin.add_subparsers(dest="plugin_action", required=True)
     plugin_apply = plugin_actions.add_parser(
         "apply", help="install, validate, enable, and position all managed plugins"
+    )
+    plugin_apply.add_argument(
+        "target", nargs="?", default="all", help="plugin ID or 'all'"
     )
     plugin_apply.add_argument(
         "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
@@ -197,6 +222,17 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_apply.add_argument("--no-progress", action="store_true")
 
     plugin_actions.add_parser("status", help="show managed plugin and placement state")
+
+    plugin_remove = plugin_actions.add_parser(
+        "remove", help="remove an installed managed plugin but retain its install protocol"
+    )
+    plugin_remove.add_argument("target", help="plugin ID to remove")
+    plugin_remove.add_argument(
+        "-y", "--yes", action="store_true", default=argparse.SUPPRESS,
+        help="remove without confirmation",
+    )
+    plugin_remove.add_argument("--dry-run", action="store_true")
+    plugin_remove.add_argument("--no-progress", action="store_true")
 
     plugin_upgrade = plugin_actions.add_parser(
         "upgrade", help="update managed plugins through Omarchy, then restore placement"
@@ -316,6 +352,17 @@ def main(
                 stdin=stdin,
                 stdout=stdout,
                 progress=not args.no_progress,
+            )
+        if args.command == "upgrade":
+            return run_upgrade(
+                args.target,
+                paths=ProgramPaths.for_user(),
+                backend=backend or OmarchyUpgradeBackend(),
+                assume_yes=args.yes,
+                check_only=args.check_only,
+                show_source=args.source,
+                stdin=stdin,
+                stdout=stdout,
             )
         if args.command == "plugin":
             paths = PluginPaths.for_user()

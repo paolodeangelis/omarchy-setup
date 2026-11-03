@@ -24,6 +24,18 @@ class DeblobConfigTests(unittest.TestCase):
 
         self.assertEqual(config.remove, ("demo-app",))
         self.assertEqual(config.protected, frozenset({"base"}))
+        self.assertEqual(config.webapps, ())
+
+    def test_loads_explicit_webapp_removal_and_mail_fallback(self) -> None:
+        config = load_config(
+            self.write_config(
+                'schema_version = 1\n[packages]\nremove = []\nprotected = []\n'
+                '[webapps]\nremove = ["HEY"]\nmailto_fallback = "zen.desktop"\n'
+            )
+        )
+
+        self.assertEqual(config.webapps, ("HEY",))
+        self.assertEqual(config.mailto_fallback, "zen.desktop")
 
     def test_rejects_remove_and_protected_overlap(self) -> None:
         path = self.write_config(

@@ -14,6 +14,7 @@ from omarchy_setup.progress import ProgressDisplay
 
 
 PACKAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9@._+:-]*$")
+WEBAPP_NAME = re.compile(r"^[^/\x00]+$")
 
 
 class DeblobError(RuntimeError):
@@ -24,6 +25,8 @@ class DeblobError(RuntimeError):
 class DeblobConfig:
     remove: tuple[str, ...]
     protected: frozenset[str]
+    webapps: tuple[str, ...] = ()
+    mailto_fallback: str | None = None
 
 
 class Backend(Protocol):
@@ -34,6 +37,10 @@ class Backend(Protocol):
     def plan_removal(self, packages: Sequence[str]) -> tuple[str, ...]: ...
 
     def default_browser(self) -> str | None: ...
+
+    def installed_webapps(self) -> set[str]: ...
+
+    def remove_webapps(self, names: Sequence[str], *, mailto_fallback: str | None) -> None: ...
 
     def acquire_privileges(self) -> None: ...
 
@@ -80,7 +87,27 @@ def load_config(path: Path) -> DeblobConfig:
     overlap = sorted(set(remove) & protected)
     if overlap:
         raise DeblobError(f"packages cannot be both removed and protected: {', '.join(overlap)}")
-    return DeblobConfig(remove=remove, protected=protected)
+    webapps = data.get("webapps", {})
+    if not isinstance(webapps, dict):
+        raise DeblobError("[webapps] must be a TOML table")
+    webapp_remove = webapps.get("remove", [])
+    if not isinstance(webapp_remove, list) or not all(
+        isinstance(item, str) and WEBAPP_NAME.fullmatch(item) for item in webapp_remove
+    ):
+        raise DeblobError("webapps.remove must contain plain web app names")
+    if len(webapp_remove) != len(set(webapp_remove)):
+        raise DeblobError("duplicate web app name in webapps.remove")
+    mailto_fallback = webapps.get("mailto_fallback")
+    if mailto_fallback is not None and (
+        not isinstance(mailto_fallback, str) or not mailto_fallback.endswith(".desktop")
+    ):
+        raise DeblobError("webapps.mailto_fallback must be a desktop-file ID")
+    return DeblobConfig(
+        remove=remove,
+        protected=protected,
+        webapps=tuple(webapp_remove),
+        mailto_fallback=mailto_fallback,
+    )
 
 
 class OmarchyBackend:
@@ -128,6 +155,21 @@ class OmarchyBackend:
         except DeblobError:
             return None
         return result.stdout.strip() or None
+
+    def installed_webapps(self) -> set[str]:
+        applications = Path.home() / ".local" / "share" / "applications"
+        return {path.stem for path in applications.glob("*.desktop") if path.is_file()}
+
+    def remove_webapps(self, names: Sequence[str], *, mailto_fallback: str | None) -> None:
+        for name in names:
+            self._run(("omarchy", "webapp", "remove", name))
+        if mailto_fallback is not None:
+            self._run(("xdg-mime", "default", mailto_fallback, "x-scheme-handler/mailto"))
+            selected = self._run(
+                ("xdg-mime", "query", "default", "x-scheme-handler/mailto")
+            ).stdout.strip()
+            if selected != mailto_fallback:
+                raise DeblobError("could not replace the removed default mail handler")
 
     def acquire_privileges(self) -> None:
         if os.geteuid() == 0:
@@ -208,15 +250,17 @@ def run_deblob(
     display.stage(2, "Inspecting installed packages")
     installed_before = backend.installed_packages()
     targets = tuple(package for package in config.remove if package in installed_before)
-    if not targets:
+    webapps_before = backend.installed_webapps()
+    webapp_targets = tuple(name for name in config.webapps if name in webapps_before)
+    if not targets and not webapp_targets:
         if not quiet:
             print("Nothing to remove. Configured packages are already absent.", file=stdout)
         display.stage(5, "Deblob state verified")
         return 0
 
-    display.stage(3, "Planning complete Pacman transaction")
-    transaction = backend.plan_removal(targets)
-    if not transaction:
+    display.stage(3, "Planning complete removal")
+    transaction = backend.plan_removal(targets) if targets else ()
+    if targets and not transaction:
         raise DeblobError("Pacman returned an empty removal transaction")
 
     protected_affected = sorted(set(transaction) & config.protected)
@@ -233,14 +277,17 @@ def run_deblob(
             raise DeblobError("Chromium is still the default browser; select a replacement first")
 
     if not quiet:
-        _show_plan(
-            configured=config.remove,
-            targets=targets,
-            transaction=transaction,
-            version=version,
-            stream=stdout,
-            display=display,
-        )
+        if targets:
+            _show_plan(
+                configured=config.remove,
+                targets=targets,
+                transaction=transaction,
+                version=version,
+                stream=stdout,
+                display=display,
+            )
+        if webapp_targets:
+            display.message("Web apps: " + ", ".join(webapp_targets))
 
     if dry_run:
         display.stage(5, "Dry run complete; no packages changed")
@@ -251,28 +298,40 @@ def run_deblob(
             print("Cancelled. No packages changed.", file=stdout)
         return 0
 
-    display.stage(4, "Requesting sudo and applying removal")
-    backend.acquire_privileges()
+    display.stage(4, "Applying removal")
+    if targets:
+        backend.acquire_privileges()
 
     current_installed = backend.installed_packages()
     if set(targets) - current_installed:
         raise DeblobError("package state changed after planning; run deblob again")
-    current_transaction = backend.plan_removal(targets)
-    if current_transaction != transaction:
-        raise DeblobError("removal transaction changed after planning; run deblob again")
+    if targets:
+        current_transaction = backend.plan_removal(targets)
+        if current_transaction != transaction:
+            raise DeblobError("removal transaction changed after planning; run deblob again")
 
     protected_before = config.protected & installed_before
-    backend.remove(targets, quiet=quiet)
+    if targets:
+        backend.remove(targets, quiet=quiet)
+    if webapp_targets:
+        backend.remove_webapps(webapp_targets, mailto_fallback=config.mailto_fallback)
 
     display.stage(5, "Verifying resulting package state")
     installed_after = backend.installed_packages()
     remaining = sorted(set(targets) & installed_after)
     missing_protected = sorted(protected_before - installed_after)
+    remaining_webapps = sorted(set(webapp_targets) & backend.installed_webapps())
     if remaining:
         raise DeblobError(f"packages remain installed after removal: {', '.join(remaining)}")
     if missing_protected:
         raise DeblobError(f"protected packages disappeared: {', '.join(missing_protected)}")
+    if remaining_webapps:
+        raise DeblobError(f"web apps remain after removal: {', '.join(remaining_webapps)}")
 
     if not quiet:
-        print(f"Removed {len(targets)} configured packages safely.", file=stdout)
+        print(
+            f"Removed {len(targets)} configured packages and "
+            f"{len(webapp_targets)} web apps safely.",
+            file=stdout,
+        )
     return 0

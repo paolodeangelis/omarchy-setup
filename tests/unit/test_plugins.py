@@ -8,6 +8,7 @@ from pathlib import Path
 
 from omarchy_setup.cli import build_parser
 from omarchy_setup.modules.plugins.core import (
+    OmarchyPluginBackend,
     Plugin,
     PluginError,
     PluginPaths,
@@ -49,6 +50,9 @@ class FakeBackend:
     def upgrade(self, plugin_id: str, *, assume_yes: bool) -> None:
         self.calls.append(("upgrade", plugin_id, assume_yes))
 
+    def remove(self, plugin: Plugin, *, assume_yes: bool) -> None:
+        self.calls.append(("remove", plugin.id, assume_yes))
+
     def command_available(self, command: str) -> bool:
         return command in self.available_commands
 
@@ -64,6 +68,9 @@ class FakeBackend:
 
     def user_service_active(self, service: str) -> bool:
         return service in self.active_services
+
+    def configure_omamail_default(self, plugin_dir: Path, open_key: str, compose_key: str) -> None:
+        self.calls.append(("configure_omamail_default", plugin_dir.name, open_key, compose_key))
 
 
 class PluginTests(unittest.TestCase):
@@ -93,6 +100,10 @@ class PluginTests(unittest.TestCase):
         battery = plugins["aabulkhairov.battery-insights"]
         monitors = plugins["crmne.hyprmoncfg"]
         media = plugins["omarchy.media"]
+        mail = plugins["omamail"]
+        vpn = plugins["io.github.grichard99.omaproton-vpn"]
+        alternative_vpn = plugins["jkoestinger.vpn"]
+        notifications = plugins["jankeesvw.notification-center"]
 
         self.assertEqual((radar.section, radar.after), ("center", "omarchy.weather"))
         self.assertEqual(radar.replaces, ("com.omastorm.radar",))
@@ -103,9 +114,84 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(monitors.requires, ("hyprmoncfg",))
         self.assertEqual(monitors.aur_packages, ("hyprmoncfg-bin",))
         self.assertEqual(monitors.user_services, ("hyprmoncfgd.service",))
+        self.assertEqual(
+            (notifications.section, notifications.after),
+            ("right", "crmne.hyprmoncfg"),
+        )
         self.assertTrue(media.builtin)
         self.assertIsNone(media.url)
         self.assertEqual((media.section, media.after), ("left", "tornikegomareli.spaces"))
+        self.assertEqual((mail.section, mail.after), ("right", "omarchy.agents"))
+        self.assertFalse(mail.enabled)
+        self.assertEqual((vpn.section, vpn.after), ("right", "omarchy.network"))
+        self.assertFalse(vpn.enabled)
+        self.assertEqual(vpn.replaces, ("jkoestinger.vpn",))
+        self.assertEqual(
+            (alternative_vpn.section, alternative_vpn.after),
+            ("right", "omarchy.network"),
+        )
+        self.assertTrue(alternative_vpn.enabled)
+        self.assertEqual(
+            alternative_vpn.replaces,
+            ("io.github.grichard99.omaproton-vpn",),
+        )
+
+    def test_targeted_apply_can_install_disabled_omamail_without_making_it_default(self) -> None:
+        run_plugins(
+            "apply", "omamail", paths=self.paths, backend=self.backend,
+            assume_yes=True, dry_run=False, stdin=io.StringIO(),
+            stdout=io.StringIO(), progress=False,
+        )
+
+        self.assertIn(("install", "omamail"), self.backend.calls)
+        self.assertFalse(any(call[0] == "configure_omamail_default" for call in self.backend.calls))
+
+    def test_alternative_vpn_is_enabled_before_current_vpn_is_disabled(self) -> None:
+        current = self.paths.installed_root / "io.github.grichard99.omaproton-vpn"
+        current.mkdir(parents=True)
+        current.joinpath("manifest.json").write_text(
+            json.dumps({"id": "io.github.grichard99.omaproton-vpn"})
+        )
+
+        run_plugins(
+            "apply", "jkoestinger.vpn", paths=self.paths, backend=self.backend,
+            assume_yes=True, dry_run=False, stdin=io.StringIO(),
+            stdout=io.StringIO(), progress=False,
+        )
+
+        enabled = self.backend.calls.index(
+            ("enable", "jkoestinger.vpn", "right", "omarchy.network")
+        )
+        disabled = self.backend.calls.index(
+            ("disable", "io.github.grichard99.omaproton-vpn")
+        )
+        self.assertLess(enabled, disabled)
+
+    def test_remove_keeps_catalog_entry_and_calls_supported_remover(self) -> None:
+        run_plugins(
+            "remove", "omamail", paths=self.paths, backend=self.backend,
+            assume_yes=True, dry_run=False, stdin=io.StringIO(),
+            stdout=io.StringIO(), progress=False,
+        )
+        self.assertIn(("remove", "omamail", True), self.backend.calls)
+
+    def test_omamail_removal_preserves_replacement_mail_binding(self) -> None:
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        bindings.parent.mkdir(parents=True)
+        replacement = (
+            "-- >>> omarchy-setup mail\n"
+            'o.bind("SUPER + SHIFT + E", "Email", "uwsm-app -- thunderbird")\n'
+            "-- <<< omarchy-setup mail\n"
+        )
+        bindings.write_text(replacement)
+        plugin = next(
+            plugin for plugin in load_plugins(self.paths.config) if plugin.id == "omamail"
+        )
+        backend = OmarchyPluginBackend(self.paths)
+        from unittest.mock import patch
+        with patch.object(backend, "_run"):
+            backend.remove(plugin, assume_yes=True)
+        self.assertEqual(bindings.read_text(), replacement)
 
     def test_apply_is_idempotent_and_disables_only_after_enable(self) -> None:
         old_radar = self.paths.installed_root / "com.omastorm.radar"
@@ -121,7 +207,7 @@ class PluginTests(unittest.TestCase):
             ), 0)
 
         installs = [call for call in self.backend.calls if call[0] == "install"]
-        self.assertEqual(len(installs), 5)
+        self.assertEqual(len(installs), 6)
         first_radar_enable = self.backend.calls.index(
             ("enable", "eduardodallecort.weather-radar", "center", "omarchy.weather")
         )
@@ -249,13 +335,17 @@ class PluginTests(unittest.TestCase):
 
     def test_cli_exposes_apply_status_and_upgrade(self) -> None:
         apply = build_parser().parse_args(["plugin", "apply", "-y"])
+        targeted = build_parser().parse_args(["plugin", "apply", "omamail", "-y"])
         status = build_parser().parse_args(["plugin", "status"])
+        remove = build_parser().parse_args(["plugin", "remove", "omamail", "-y"])
         upgrade = build_parser().parse_args([
             "plugin", "upgrade", "eduardodallecort.weather-radar", "-y"
         ])
 
         self.assertEqual((apply.plugin_action, apply.yes), ("apply", True))
+        self.assertEqual(targeted.target, "omamail")
         self.assertEqual(status.plugin_action, "status")
+        self.assertEqual(remove.target, "omamail")
         self.assertEqual(upgrade.target, "eduardodallecort.weather-radar")
 
 if __name__ == "__main__":

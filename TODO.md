@@ -25,13 +25,20 @@
 - [ ] Implement `programs status`
 - [x] Implement `--install-only`
 - [x] Add explicit single-program uninstall with preserved user data and safe exclusions for Miniforge/WinApps
+- [x] Add source-aware upgrade checks, an interactive selector, independent Flatpak updates, and supported full-system Omarchy updates
+- [ ] Add disposable-VM acceptance for upgrade reporting and delegation; unit tests prove selection/orchestration, not a real package transaction
 - [x] Add Zen, 1Password, Dropbox, Spotify, WhatsApp, and Telegram
-- [x] Add LibreOffice with US English and Italian spell-check dictionaries
+- [x] Add Proton VPN CLI and selectable OmaProton/general VPN bar integrations
+- [x] Add LibreOffice with US English/Italian spelling and US English hyphenation
 - [x] Add Zotero with interactive account and sync onboarding
-- [x] Make Zen setup manage an idempotent `Super+Shift+B` unsynced blank-window override
+- [x] Add BlueBubbles through existing system Flatpak/Flathub with install, onboarding, detection, and preservation-safe removal
+- [x] Add Thunderbird as the default mail client; retain disabled Omamail install/remove support
+- [ ] Evaluate the managed ONLYOFFICE Desktop Editors install with real DOCX/PPTX round trips before considering its heavier self-hosted server stacks; ONLYOFFICE 10 currently leaves its XWayland editor invisible after exiting presentation mode (upstream Hyprland #16436 / ONLYOFFICE #2530), so presentation use remains unverified
+- [ ] Validate Zen's managed Window Sync opt-out and persistent independent `Super+Shift+B` windows across a reboot
 - [x] Add an Outlook web-app protocol with interactive login and notification onboarding
 - [x] Install native Zoom through `install all`, make it the meeting-link handler, and retain `zoom-web` as an optional fallback
 - [ ] Confirm native Zoom package, launcher preservation, protocol defaults, and idempotency in successful pinned/latest/upgrade VM runs
+- [ ] Validate Proton VPN sign-in, connection, kill switch, suspend/resume, and plugin rendering in disposable/current Omarchy environments
 - [x] Add Miniforge-backed `mamba` with an Omarchy-safe shell integration
 - [x] Review upstream WinApps and record a manual-first install, acceptance, and preservation-safe removal plan in `programs/winapps/PLAN.md`
 - [x] Audit WinApps plan for Mac layout fidelity, Dropbox co-authoring, sandbox/host evidence, OEM assets, and installer source drift
@@ -43,7 +50,7 @@
 - [x] Add explicit WinApps preparation plus direct-KVM Notepad/Edge smoke gated after each configured Omarchy release-upgrade run; verified by workflow run `37084133207`
 
 ## Configuration
-- [ ] Dotfile deployment
+- [x] Deploy idempotent shell aliases alongside managed tmux and Hyprland settings
 - [x] Manage tmux layout persistence and the Super+Q close-window override
 - [x] Theme management
 - [x] Implement fixed-liquid and floating bar appearances (currently both use the overlay)
@@ -53,9 +60,10 @@
 - [x] Add fixed-mode shell overrides, restart the live shell when their effective theme changes, and provide literal floating popup-gap control
 - [x] Resolve shell surface colours from the native theme palette during installation
 - [x] Preserve the Olio overlay environment for bar-launched Omarchy commands
-- [x] Keep Spaces after Menu (replacing stock Workspaces), Omastorm radar after Weather, and Notification Center after Power in both bar modes
+- [x] Keep Spaces after Menu (replacing stock Workspaces), Weather Radar after Weather, and Notification Center rightmost in both bar modes
 - [x] Move managed plugins out of theme activation into `omarchy-setup plugin`; keep IDs, sources, placement, and safe replacements editable in `plugins/plugins.toml`
 - [x] Manage the built-in `omarchy.media` widget after Spaces without cloning Omarchy-owned source
+- [x] Keep application defaults and shortcuts editable in `config/apps.toml`
 - [x] Screen-clamp oversized floating popups so Notification Center keeps the right-side gap
 - [x] Restore Notification Center own-service access through host-owned widget construction; visually verify fresh messages in both modes
 - [x] Align notification toast offsets with the accepted bar popups in both modes; preserve notification borders
@@ -96,6 +104,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [x] Implement explicit package-list application
 - [x] Implement package-state verification
 - [ ] Add optional feature groups and matching service/config cleanup
+- [x] Remove configured Omarchy web apps separately from Pacman packages and replace stale default handlers
 - [ ] Validate removal policy in Omarchy VMs
 
 ## Testing / CI

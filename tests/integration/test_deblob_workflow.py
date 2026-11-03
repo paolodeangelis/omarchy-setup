@@ -24,6 +24,8 @@ class FakeBackend:
         self.browser = browser
         self.privilege_requests = 0
         self.removals = 0
+        self.webapps = {"HEY"}
+        self.webapp_removals = 0
 
     def check_environment(self) -> str:
         return "4.0.4-1"
@@ -36,6 +38,13 @@ class FakeBackend:
 
     def default_browser(self) -> str | None:
         return self.browser
+
+    def installed_webapps(self) -> set[str]:
+        return set(self.webapps)
+
+    def remove_webapps(self, names, *, mailto_fallback) -> None:
+        self.webapp_removals += 1
+        self.webapps.difference_update(names)
 
     def acquire_privileges(self) -> None:
         self.privilege_requests += 1
@@ -71,6 +80,7 @@ class DeblobWorkflowTests(unittest.TestCase):
         self.config = DeblobConfig(
             remove=("chromium", "notes-app"),
             protected=frozenset({"base", "omarchy"}),
+            webapps=(),
         )
 
     def test_yes_applies_and_verifies_without_prompt(self) -> None:
@@ -134,6 +144,23 @@ class DeblobWorkflowTests(unittest.TestCase):
             run(self.config, backend)
 
         self.assertEqual(backend.privilege_requests, 0)
+
+    def test_webapp_only_removal_needs_no_sudo_and_is_idempotent(self) -> None:
+        config = DeblobConfig(
+            remove=(), protected=frozenset(), webapps=("HEY",),
+            mailto_fallback="zen.desktop",
+        )
+        backend = FakeBackend(set(), ())
+
+        result, output = run(config, backend)
+        self.assertEqual(result, 0)
+        self.assertEqual(backend.privilege_requests, 0)
+        self.assertEqual(backend.webapp_removals, 1)
+        self.assertNotIn("HEY", backend.webapps)
+        self.assertIn("1 web apps", output)
+
+        run(config, backend)
+        self.assertEqual(backend.webapp_removals, 1)
 
 
 if __name__ == "__main__":

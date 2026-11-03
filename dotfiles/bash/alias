@@ -1,0 +1,3 @@
+# Personal command shortcuts managed by omarchy-setup.
+alias vim='nvim'
+alias ll='ls -a'

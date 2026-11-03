@@ -19,6 +19,8 @@ TMUX_START = "# >>> omarchy-setup persistence >>>"
 TMUX_END = "# <<< omarchy-setup persistence <<<"
 HYPR_START = "-- >>> omarchy-setup window-close >>>"
 HYPR_END = "-- <<< omarchy-setup window-close <<<"
+BASH_START = "# >>> omarchy-setup aliases >>>"
+BASH_END = "# <<< omarchy-setup aliases <<<"
 
 PLUGINS = (
     (
@@ -59,6 +61,18 @@ class DotfilesPaths:
     def plugin_root(self) -> Path:
         return self.state_root / "tmux" / "plugins"
 
+    @property
+    def bashrc(self) -> Path:
+        return self.config_home.parent / ".bashrc"
+
+    @property
+    def aliases(self) -> Path:
+        return self.config_home.parent / ".alias"
+
+    @property
+    def aliases_source(self) -> Path:
+        return self.repo_root / "dotfiles" / "bash" / "alias"
+
 
 class Backend(Protocol):
     def check(self, paths: DotfilesPaths) -> None: ...
@@ -83,7 +97,7 @@ class OmarchyDotfilesBackend:
         for command in ("git", "tmux", "hyprctl"):
             if shutil.which(command) is None:
                 raise DotfilesError(f"required command not found: {command}")
-        for target in (paths.tmux_config, paths.hypr_bindings):
+        for target in (paths.tmux_config, paths.hypr_bindings, paths.bashrc, paths.aliases_source):
             if not target.is_file():
                 raise DotfilesError(f"expected Omarchy configuration is missing: {target}")
 
@@ -118,7 +132,7 @@ class OmarchyDotfilesBackend:
     def apply(self, paths: DotfilesPaths) -> None:
         tmux_block = f"""{TMUX_START}
 set -g @resurrect-dir '~/.local/state/omarchy-setup/tmux/resurrect'
-set -g @continuum-save-interval '15'
+set -g @continuum-save-interval '1'
 set -g @continuum-restore 'on'
 run-shell '~/.local/state/omarchy-setup/tmux/plugins/tmux-resurrect/resurrect.tmux'
 run-shell '~/.local/state/omarchy-setup/tmux/plugins/tmux-continuum/continuum.tmux'
@@ -135,14 +149,26 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
         paths.hypr_bindings.write_text(
             _replace_block(paths.hypr_bindings.read_text(), HYPR_START, HYPR_END, hypr_block)
         )
+        bash_block = f'''{BASH_START}
+[[ -r "$HOME/.alias" ]] && source "$HOME/.alias"
+{BASH_END}'''
+        paths.bashrc.write_text(
+            _replace_block(paths.bashrc.read_text(), BASH_START, BASH_END, bash_block)
+        )
+        shutil.copyfile(paths.aliases_source, paths.aliases)
 
     def verify(self, paths: DotfilesPaths) -> None:
         tmux = paths.tmux_config.read_text()
         hypr = paths.hypr_bindings.read_text()
+        bashrc = paths.bashrc.read_text()
         if tmux.count(TMUX_START) != 1 or tmux.count(TMUX_END) != 1:
             raise DotfilesError("tmux persistence block could not be verified")
         if hypr.count(HYPR_START) != 1 or hypr.count(HYPR_END) != 1:
             raise DotfilesError("Hyprland keybinding overrides could not be verified")
+        if bashrc.count(BASH_START) != 1 or bashrc.count(BASH_END) != 1:
+            raise DotfilesError("shell aliases block could not be verified")
+        if paths.aliases.read_bytes() != paths.aliases_source.read_bytes():
+            raise DotfilesError("shell aliases file could not be verified")
         for name, _, revision in PLUGINS:
             result = subprocess.run(
                 ("git", "-C", str(paths.plugin_root / name), "rev-parse", "HEAD"),

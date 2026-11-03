@@ -101,8 +101,12 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "1password",
                 "dropbox",
                 "spotify",
+                "proton-vpn",
                 "libreoffice",
+                "onlyoffice",
+                "bluebubbles",
                 "zotero",
+                "thunderbird",
                 "outlook",
                 "zoom",
                 "telegram",
@@ -111,7 +115,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
         self.assertEqual(backend.defaults, [])
         self.assertEqual(backend.logins, [])
         self.assertEqual(backend.package_preparations, 1)
-        self.assertIn("[3/14] Installing Mamba", output)
+        self.assertIn("[3/18] Installing Mamba", output)
 
     def test_login_and_default_hooks_run_for_installed_program(self) -> None:
         backend = FakeBackend(installed={"zen"})
@@ -131,8 +135,12 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "1password",
                 "dropbox",
                 "spotify",
+                "proton-vpn",
                 "libreoffice",
+                "onlyoffice",
+                "bluebubbles",
                 "zotero",
+                "thunderbird",
                 "outlook",
                 "zoom",
                 "whatsapp",
@@ -142,7 +150,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
 
         self.execute("all", backend, login=True, set_defaults=True)
 
-        self.assertEqual(backend.defaults, ["zen"])
+        self.assertEqual(backend.defaults, ["zen", "thunderbird"])
         self.assertEqual(
             backend.logins,
             [
@@ -150,7 +158,10 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "1password",
                 "dropbox",
                 "spotify",
+                "proton-vpn",
+                "bluebubbles",
                 "zotero",
+                "thunderbird",
                 "outlook",
                 "zoom",
                 "whatsapp",

@@ -47,6 +47,7 @@ omarchy-setup install all
 omarchy-setup uninstall <name>
 omarchy-setup programs list
 omarchy-setup programs status
+omarchy-setup upgrade [all|program] [--check] [--source]
 
 omarchy-setup plugin apply
 omarchy-setup plugin status
@@ -136,6 +137,8 @@ omarchy-setup install zen --login --default
 omarchy-setup install 1password --login
 omarchy-setup install dropbox --login
 omarchy-setup install libreoffice
+omarchy-setup install onlyoffice
+omarchy-setup install bluebubbles --login
 omarchy-setup install zotero -l
 omarchy-setup install outlook --login
 omarchy-setup install zoom --login
@@ -152,6 +155,8 @@ Remove one managed application with:
 
 ```bash
 omarchy-setup uninstall spotify
+omarchy-setup uninstall onlyoffice
+omarchy-setup uninstall bluebubbles
 omarchy-setup uninstall zen
 ```
 
@@ -160,6 +165,23 @@ and account data. There is intentionally no `uninstall all`. Miniforge and
 WinApps removal remain manual because their trees may contain user environments
 or a Windows guest disk. Zen removal also refuses to proceed while Zen is the
 active default browser; select another default first.
+
+Check installed versions and their package sources without changing anything:
+
+```bash
+omarchy-setup upgrade all --check --source
+```
+
+Run `omarchy-setup upgrade` with no target for an interactive terminal list:
+use the arrow keys to move, Space to toggle `[ ]`/`[x]`, Enter to continue,
+and Q to cancel. A named Flatpak is updated independently. Selecting any
+Pacman, AUR, or Omarchy-managed package runs the supported full
+`omarchy update` once, because partial Arch upgrades are unsupported. That
+updater owns its normal Snapper checkpoint and sudo prompts; `-y` suppresses
+ordinary confirmations but does not bypass either privilege or safety checks.
+Manual sources such as WinApps and Miniforge are reported but not upgraded
+automatically. Network checks time out after 30 seconds and report `unknown`
+instead of claiming that an unverified package is current.
 
 ## Dotfiles
 
@@ -176,12 +198,15 @@ first tmux server starts after reboot. `Ctrl+Space`, then `Ctrl+S` saves now;
 preserved across reboot.
 
 Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
-`spotify`, LibreOffice with English/Italian spell checking, Zotero, native Zoom, the
+`spotify`, LibreOffice with English/Italian spell checking, BlueBubbles, Zotero, native Zoom, the
 Outlook and WhatsApp web apps, `telegram`, and
 WinApps. Native Zoom is included in `install all`; its launcher becomes the
 verified handler for `zoommtg://` and `zoomus://` links. The separate
 `zoom-web` protocol is an optional fallback and is not included in `all`.
 The native client is installed from AUR through Omarchy's supported helper.
+BlueBubbles is installed from Flathub and requires Flatpak and the `flathub`
+remote to exist already; the utility does not install or configure Flatpak.
+Removing BlueBubbles preserves its Flatpak application data.
 1Password uses Omarchy's supported service installer for the desktop app, CLI,
 and Chromium extension. `--login` opens the desktop app for interactive sign-in;
 credentials are never handled or stored by `omarchy-setup`.

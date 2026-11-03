@@ -1374,10 +1374,10 @@ Item {
       // this window's coordinate space; inset the painted island below rather
       // than shrinking the host, or right-side third-party popups clamp to
       // the host's left edge.
-      top: root.position === "top" && root.barHidden ? root.parkedMargin : 0
-      bottom: root.position === "bottom" && root.barHidden ? root.parkedMargin : 0
-      left: root.position === "left" && root.barHidden ? root.parkedMargin : 0
-      right: root.position === "right" && root.barHidden ? root.parkedMargin : 0
+      top: root.position === "top" && root.barHidden ? barWindow.parkedMargin : 0
+      bottom: root.position === "bottom" && root.barHidden ? barWindow.parkedMargin : 0
+      left: root.position === "left" && root.barHidden ? barWindow.parkedMargin : 0
+      right: root.position === "right" && root.barHidden ? barWindow.parkedMargin : 0
     }
 
     anchors {

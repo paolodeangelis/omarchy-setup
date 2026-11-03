@@ -10,7 +10,7 @@ from omarchy_setup.modules.dotfiles import (
     OmarchyDotfilesBackend,
     run_dotfiles,
 )
-from omarchy_setup.modules.dotfiles.core import HYPR_START, TMUX_START, _replace_block
+from omarchy_setup.modules.dotfiles.core import BASH_START, HYPR_START, TMUX_START, _replace_block
 
 
 class FakeBackend:
@@ -48,22 +48,31 @@ class DotfilesTests(unittest.TestCase):
             paths = DotfilesPaths(root, root / "state", root / "config")
             paths.tmux_config.parent.mkdir(parents=True)
             paths.hypr_bindings.parent.mkdir(parents=True)
+            paths.aliases_source.parent.mkdir(parents=True)
             paths.tmux_config.write_text("set -g mouse on\n")
             paths.hypr_bindings.write_text("-- personal\n")
+            paths.bashrc.write_text("# personal\n")
+            paths.aliases_source.write_text("alias vim='nvim'\n")
             backend = OmarchyDotfilesBackend()
 
             backend.apply(paths)
             first_tmux = paths.tmux_config.read_text()
             first_hypr = paths.hypr_bindings.read_text()
+            first_bashrc = paths.bashrc.read_text()
             backend.apply(paths)
 
             self.assertEqual(paths.tmux_config.read_text(), first_tmux)
             self.assertEqual(paths.hypr_bindings.read_text(), first_hypr)
+            self.assertEqual(paths.bashrc.read_text(), first_bashrc)
             self.assertIn("set -g mouse on", first_tmux)
+            self.assertIn("@continuum-save-interval '1'", first_tmux)
             self.assertIn("@continuum-restore 'on'", first_tmux)
             self.assertIn("-- personal", first_hypr)
             self.assertIn('hl.unbind("SUPER + W")', first_hypr)
             self.assertIn('o.bind("SUPER + Q", "Close window"', first_hypr)
+            self.assertIn("# personal", first_bashrc)
+            self.assertEqual(first_bashrc.count(BASH_START), 1)
+            self.assertEqual(paths.aliases.read_text(), "alias vim='nvim'\n")
 
     def test_dry_run_only_checks(self) -> None:
         backend = FakeBackend()

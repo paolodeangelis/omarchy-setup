@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol, TextIO
 
 from omarchy_setup.progress import ProgressDisplay
+from omarchy_setup.app_config import AppConfigError, load_app_config
 
 
 SPACES_ID = "tornikegomareli.spaces"
@@ -29,6 +30,7 @@ class Plugin:
     section: str
     after: str
     builtin: bool = False
+    enabled: bool = True
     replaces: tuple[str, ...] = ()
     requires: tuple[str, ...] = ()
     aur_packages: tuple[str, ...] = ()
@@ -100,12 +102,15 @@ def load_plugins(path: Path) -> tuple[Plugin, ...]:
         plugin_id, url = row.get("id"), row.get("url")
         section, after = row.get("section"), row.get("after")
         builtin = row.get("builtin", False)
+        enabled = row.get("enabled", True)
         if not all(isinstance(value, str) and value for value in (plugin_id, section, after)):
             raise PluginError("plugin entries require non-empty id, section and after strings")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", plugin_id) or ".." in plugin_id:
             raise PluginError(f"invalid plugin id: {plugin_id!r}")
         if not isinstance(builtin, bool):
             raise PluginError(f"builtin for {plugin_id} must be true or false")
+        if not isinstance(enabled, bool):
+            raise PluginError(f"enabled for {plugin_id} must be true or false")
         if builtin:
             if not plugin_id.startswith("omarchy.") or url is not None:
                 raise PluginError(
@@ -154,6 +159,7 @@ def load_plugins(path: Path) -> tuple[Plugin, ...]:
                 section=section,
                 after=after,
                 builtin=builtin,
+                enabled=enabled,
                 replaces=tuple(replacements),
                 requires=tuple(requirements),
                 aur_packages=tuple(aur_packages),
@@ -169,10 +175,12 @@ class PluginBackend(Protocol):
     def enable(self, plugin: Plugin) -> None: ...
     def disable(self, plugin_id: str) -> None: ...
     def upgrade(self, plugin_id: str, *, assume_yes: bool) -> None: ...
+    def remove(self, plugin: Plugin, *, assume_yes: bool) -> None: ...
     def command_available(self, command: str) -> bool: ...
     def install_requirements(self, plugin: Plugin) -> None: ...
     def enable_user_services(self, plugin: Plugin) -> None: ...
     def user_service_active(self, service: str) -> bool: ...
+    def configure_omamail_default(self, plugin_dir: Path, open_key: str, compose_key: str) -> None: ...
 
 
 class OmarchyPluginBackend:
@@ -246,6 +254,25 @@ class OmarchyPluginBackend:
             command.append("--yes")
         self._run(tuple(command), interactive=not assume_yes)
 
+    def remove(self, plugin: Plugin, *, assume_yes: bool) -> None:
+        command = ["omarchy", "plugin", "remove", plugin.id]
+        if assume_yes:
+            command.append("--yes")
+        self._run(tuple(command), interactive=not assume_yes)
+        if plugin.id == "omamail":
+            bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+            if bindings.exists():
+                pattern = re.compile(
+                    r"-- >>> omarchy-setup mail.*?-- <<< omarchy-setup mail\n?", re.S
+                )
+                contents = bindings.read_text()
+                match = pattern.search(contents)
+                if match and "omamail" in match.group():
+                    _write_atomic(bindings, pattern.sub("", contents).rstrip() + "\n")
+            desktop = self.paths.home / ".local" / "share" / "applications" / "omamail.desktop"
+            desktop.unlink(missing_ok=True)
+            self._run(("hyprctl", "reload"))
+
     def command_available(self, command: str) -> bool:
         return shutil.which(command) is not None
 
@@ -267,6 +294,36 @@ class OmarchyPluginBackend:
             env=self._environment(),
         )
         return result.returncode == 0
+
+    def configure_omamail_default(
+        self, plugin_dir: Path, open_key: str, compose_key: str
+    ) -> None:
+        register = plugin_dir / "scripts" / "register-mailto.sh"
+        if not register.is_file():
+            raise PluginError(f"Omamail mail-handler script is missing: {register}")
+        self._run(("bash", str(register), str(plugin_dir), "--claim-default"))
+        selected = subprocess.run(
+            ("xdg-mime", "query", "default", "x-scheme-handler/mailto"),
+            text=True, capture_output=True, check=False,
+        ).stdout.strip()
+        if selected != "omamail.desktop":
+            raise PluginError(f"Omamail did not become the mail handler; xdg-mime reports {selected!r}")
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        start, end = "-- >>> omarchy-setup mail", "-- <<< omarchy-setup mail"
+        contents = bindings.read_text() if bindings.exists() else ""
+        pattern = re.compile(re.escape(start) + r".*?" + re.escape(end) + r"\n?", re.S)
+        contents = pattern.sub("", contents).rstrip()
+        block = (
+            f'{start}\n'
+            f'hl.unbind("{open_key}")\n'
+            f'hl.unbind("{compose_key}")\n'
+            f'o.bind("{open_key}", "Email", "omarchy-shell shell summon omamail \'{{}}\'")\n'
+            f'o.bind("{compose_key}", "New email", '
+            '"omarchy-shell shell summon omamail \'{\\"compose\\":true}\'")\n'
+            f'{end}\n'
+        )
+        _write_atomic(bindings, (contents + "\n\n" if contents else "") + block)
+        self._run(("hyprctl", "reload"))
 
 
 def _manifest_id(path: Path, expected: str) -> str:
@@ -490,8 +547,13 @@ def run_plugins(
     if action == "status":
         print(format_plugin_status(paths), file=stdout)
         return 0
+    if action == "apply" and target == "all":
+        selected = tuple(plugin for plugin in selected if plugin.enabled)
     if dry_run:
-        verb = "upgrade and reconcile" if action == "upgrade" else "install and reconcile"
+        if action == "remove":
+            verb = "remove"
+        else:
+            verb = "upgrade and reconcile" if action == "upgrade" else "install and reconcile"
         print(f"Would {verb}: {', '.join(plugin.id for plugin in selected)}", file=stdout)
         return 0
     if action == "apply" and not assume_yes:
@@ -503,6 +565,10 @@ def run_plugins(
 
     display = ProgressDisplay(stdout, enabled=progress, quiet=False, total=len(selected) + 1)
     for index, plugin in enumerate(selected, start=1):
+        if action == "remove":
+            display.stage(index, f"Removing {plugin.id}")
+            backend.remove(plugin, assume_yes=assume_yes)
+            continue
         display.stage(index, f"{'Upgrading' if action == 'upgrade' else 'Reconciling'} {plugin.id}")
         if action == "upgrade":
             if not plugin.builtin:
@@ -511,6 +577,16 @@ def run_plugins(
                     raise PluginError(f"managed plugin {plugin.id} is not installed; run plugin apply first")
                 backend.upgrade(plugin.id, assume_yes=assume_yes)
         _reconcile_one(paths, backend, plugin)
+
+        if plugin.id == "omamail":
+            try:
+                apps = load_app_config(paths.repo_root / "config" / "apps.toml")
+            except AppConfigError as error:
+                raise PluginError(str(error)) from error
+            if apps.mail == "omamail":
+                backend.configure_omamail_default(
+                    paths.installed_root / plugin.id, apps.mail_open, apps.mail_compose
+                )
 
     if any(plugin.id == SPACES_ID for plugin in selected):
         ensure_spaces_agent_hooks(paths)

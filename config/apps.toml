@@ -1,0 +1,12 @@
+# Editable application defaults and their Omarchy shortcuts.
+
+[defaults]
+browser = "zen"
+mail = "thunderbird"
+
+[keybindings.browser]
+new_window = "SUPER + SHIFT + B"
+
+[keybindings.mail]
+open = "SUPER + SHIFT + E"
+compose = "SUPER + SHIFT + ALT + E"

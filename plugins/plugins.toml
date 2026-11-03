@@ -28,18 +28,36 @@ after = "omarchy.weather"
 replaces = ["com.omastorm.radar"]
 
 [[plugin]]
-id = "jankeesvw.notification-center"
-url = "https://github.com/jankeesvw/omarchy-notification-center.git"
-section = "right"
-after = "omarchy.power"
-
-[[plugin]]
 id = "aabulkhairov.battery-insights"
 url = "https://github.com/aabulkhairov/omarchy-battery-insights.git"
 section = "right"
 after = "omarchy.tray"
 
-# Battery Insights intentionally does not replace `omarchy.power`.
+# This places Battery Insights beside the tray; plugin widgets cannot enter its
+# expandable StatusNotifier drawer. It intentionally does not replace Power.
+
+[[plugin]]
+id = "io.github.grichard99.omaproton-vpn"
+url = "https://github.com/grichard99/omaproton-vpn.git"
+section = "right"
+after = "omarchy.network"
+replaces = ["jkoestinger.vpn"]
+enabled = false
+
+[[plugin]]
+id = "jkoestinger.vpn"
+url = "https://github.com/jkoestinger/omarchy-vpn.git"
+section = "right"
+after = "omarchy.network"
+enabled = true
+replaces = ["io.github.grichard99.omaproton-vpn"]
+
+[[plugin]]
+id = "omamail"
+url = "https://github.com/huacnlee/omamail.git"
+section = "right"
+after = "omarchy.agents"
+enabled = false
 
 [[plugin]]
 id = "crmne.hyprmoncfg"
@@ -54,3 +72,9 @@ user_services = ["hyprmoncfgd.service"]
 # Install and verify the backend and daemon before enabling this replacement.
 # An existing source-built `hyprmoncfg` also satisfies `requires` and avoids
 # the binary AUR package.
+
+[[plugin]]
+id = "jankeesvw.notification-center"
+url = "https://github.com/jankeesvw/omarchy-notification-center.git"
+section = "right"
+after = "crmne.hyprmoncfg"
