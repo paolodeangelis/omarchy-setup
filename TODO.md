@@ -7,6 +7,7 @@
 - [x] Create dedicated `omarchy-setup` environment
 - [x] Install project CLI
 - [x] Create `~/.local/bin/omarchy-setup`
+- [x] Install repository-managed Bash completion for commands, programs, plugins, and theme modes
 
 ## Core
 - [x] Implement `doctor` (shell/IPC, OSD/menu, keybindings, helper commands, recent errors, optional UI smoke)

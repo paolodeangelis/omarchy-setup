@@ -191,12 +191,15 @@ def format_upgrade_status(statuses: Sequence[UpgradeStatus], *, show_source: boo
     installed = [status for status in statuses if status.automatic]
     if not installed:
         return "No automatically upgradable managed programs are installed."
-    columns = [("PROGRAM", 16), ("INSTALLED", 22), ("AVAILABLE", 22)]
+    if all(status.state == "current" for status in installed):
+        return "All automatically upgradable managed programs are up to date."
+    visible = [status for status in installed if status.state != "current"]
+    columns = [("PROGRAM", 16), ("INSTALLED", 19), ("AVAILABLE", 19)]
     if show_source:
         columns.append(("SOURCE", 10))
     header = "  ".join(label.ljust(width) for label, width in columns).rstrip()
     rows = [header, "  ".join("-" * width for _, width in columns).rstrip()]
-    for status in installed:
+    for status in visible:
         available = status.candidate if status.state == "update" else status.state
         values = [status.program.name, status.current, available]
         if show_source:

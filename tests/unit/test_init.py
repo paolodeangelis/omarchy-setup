@@ -55,6 +55,8 @@ class InitTests(unittest.TestCase):
         (repo / "pyproject.toml").write_text("[project]\nname='example'\nversion='1'\n")
         (repo / "uv.lock").write_text("version = 1\n")
         (repo / "omarchy-setup").write_text("#!/bin/sh\n")
+        (repo / "completions").mkdir()
+        (repo / "completions" / "omarchy-setup").write_text("complete -F _omarchy_setup omarchy-setup\n")
         self.paths = InitPaths(
             repo_root=repo,
             state_root=root / "state" / "omarchy-setup",
@@ -84,6 +86,7 @@ class InitTests(unittest.TestCase):
         self.assertEqual(backend.environment_builds, 1)
         self.assertTrue(self.paths.environment.is_dir())
         self.assertEqual(self.paths.launcher.resolve(), self.paths.source_launcher.resolve())
+        self.assertEqual(self.paths.completion.resolve(), self.paths.source_completion.resolve())
         self.assertIn("Ready. Run:", output)
 
     def test_second_init_is_idempotent(self) -> None:
@@ -127,6 +130,17 @@ class InitTests(unittest.TestCase):
         backend = FakeBackend()
 
         with self.assertRaisesRegex(InitError, "unrelated launcher"):
+            self.execute(backend)
+
+        self.assertEqual(backend.uv_installs, 0)
+        self.assertEqual(backend.environment_builds, 0)
+
+    def test_refuses_unrelated_completion_before_changes(self) -> None:
+        self.paths.completion.parent.mkdir(parents=True)
+        self.paths.completion.write_text("unrelated\n")
+        backend = FakeBackend()
+
+        with self.assertRaisesRegex(InitError, "unrelated completion"):
             self.execute(backend)
 
         self.assertEqual(backend.uv_installs, 0)

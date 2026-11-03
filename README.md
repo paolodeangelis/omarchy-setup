@@ -82,8 +82,16 @@ cd ~/.omarchy-setup
 
 Initialization downloads a pinned, checksum-verified `uv`, creates a dedicated
 Python environment under `~/.local/state/omarchy-setup`, installs this project,
-and links `~/.local/bin/omarchy-setup` to the repository launcher. It does not
+links `~/.local/bin/omarchy-setup` to the repository launcher, and links its
+Bash completion into `~/.local/share/bash-completion/completions`. It does not
 write generated environment files into the repository and does not need sudo.
+
+Bash-completion discovers that user completion file when a new interactive
+shell starts. Press Tab after `omarchy-setup` to complete commands, options,
+managed programs, plugin IDs, and theme modes. The completion file is linked
+to this repository, so repository updates change its definitions immediately;
+start a new shell (or source the file) if the current shell already loaded an
+older definition.
 
 Later commands use the environment automatically:
 
@@ -172,8 +180,10 @@ Check installed versions and their package sources without changing anything:
 omarchy-setup upgrade all --check --source
 ```
 
-The report is a compact table of automatically upgradable installed programs,
-their installed/available versions, and optionally their source. Run
+The report is a compact table of available updates and unknown checks, with
+installed/available versions and optionally their source. Current programs are
+omitted; when every check is current, the command prints one up-to-date summary
+instead. Run
 `omarchy-setup upgrade` with no target for a list containing only programs with
 a known update: use the arrow keys to move, Space to toggle `[ ]`/`[x]`, Enter
 to continue, and Q to cancel. A named Flatpak is updated independently. Selecting any

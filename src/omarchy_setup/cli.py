@@ -201,7 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upgrade.add_argument(
         "--source", action="store_true",
-        help="show package source and identifiers",
+        help="show the package source",
     )
 
     plugin = commands.add_parser(

@@ -40,6 +40,7 @@ class InitPaths:
     repo_root: Path
     state_root: Path
     bin_dir: Path
+    data_home: Path | None = None
 
     @classmethod
     def for_user(cls) -> "InitPaths":
@@ -50,11 +51,13 @@ class InitPaths:
             else Path(__file__).resolve().parents[4]
         )
         state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+        data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
         bin_dir = Path(os.environ.get("OMARCHY_SETUP_BIN_DIR", Path.home() / ".local" / "bin"))
         return cls(
             repo_root=repo_root,
             state_root=state_home / "omarchy-setup",
             bin_dir=bin_dir,
+            data_home=data_home,
         )
 
     @property
@@ -84,6 +87,15 @@ class InitPaths:
     @property
     def source_launcher(self) -> Path:
         return self.repo_root / "omarchy-setup"
+
+    @property
+    def completion(self) -> Path:
+        data_home = self.data_home or self.bin_dir.parent / "share"
+        return data_home / "bash-completion" / "completions" / "omarchy-setup"
+
+    @property
+    def source_completion(self) -> Path:
+        return self.repo_root / "completions" / "omarchy-setup"
 
 
 class BootstrapBackend(Protocol):
@@ -228,6 +240,10 @@ def _launcher_is_current(paths: InitPaths) -> bool:
     return paths.launcher.is_symlink() and paths.launcher.resolve() == paths.source_launcher.resolve()
 
 
+def _completion_is_current(paths: InitPaths) -> bool:
+    return paths.completion.is_symlink() and paths.completion.resolve() == paths.source_completion.resolve()
+
+
 def _confirm(stdin: TextIO, stdout: TextIO) -> bool:
     print("Create or update the omarchy-setup environment? [y/N] ", end="", flush=True, file=stdout)
     return stdin.readline().strip().lower() in {"y", "yes"}
@@ -287,6 +303,19 @@ def _install_launcher(paths: InitPaths) -> None:
     os.replace(temporary, paths.launcher)
 
 
+def _install_completion(paths: InitPaths) -> None:
+    paths.completion.parent.mkdir(parents=True, exist_ok=True)
+    if paths.completion.exists() or paths.completion.is_symlink():
+        if _completion_is_current(paths):
+            return
+        raise InitError(f"refusing to replace unrelated completion: {paths.completion}")
+    temporary = paths.completion.with_name(".omarchy-setup.next")
+    if temporary.exists() or temporary.is_symlink():
+        temporary.unlink()
+    temporary.symlink_to(paths.source_completion)
+    os.replace(temporary, paths.completion)
+
+
 def run_init(
     paths: InitPaths,
     *,
@@ -304,8 +333,12 @@ def run_init(
         raise InitError("do not run omarchy-setup init as root")
     if not paths.source_launcher.is_file():
         raise InitError(f"repository launcher missing: {paths.source_launcher}")
+    if not paths.source_completion.is_file():
+        raise InitError(f"repository completion missing: {paths.source_completion}")
     if (paths.launcher.exists() or paths.launcher.is_symlink()) and not _launcher_is_current(paths):
         raise InitError(f"refusing to replace unrelated launcher: {paths.launcher}")
+    if (paths.completion.exists() or paths.completion.is_symlink()) and not _completion_is_current(paths):
+        raise InitError(f"refusing to replace unrelated completion: {paths.completion}")
     _managed_environment_target(paths.environment, paths.environments)
     _managed_environment_target(paths.previous_environment, paths.environments)
 
@@ -323,6 +356,7 @@ def run_init(
         except InitError:
             needs_environment = True
     needs_launcher = not _launcher_is_current(paths)
+    needs_completion = not _completion_is_current(paths)
 
     changes = []
     if needs_uv:
@@ -331,6 +365,8 @@ def run_init(
         changes.append(f"create dedicated environment in {paths.environment}")
     if needs_launcher:
         changes.append(f"link {paths.launcher} to this repository")
+    if needs_completion:
+        changes.append(f"link Bash completion at {paths.completion}")
 
     if not changes:
         backend.verify_environment(paths.environment)
@@ -388,10 +424,12 @@ def run_init(
     else:
         display.stage(3, "Dedicated Python environment verified")
 
-    display.stage(4, "Installing user launcher")
+    display.stage(4, "Installing user launcher and completion")
 
     if needs_launcher:
         _install_launcher(paths)
+    if needs_completion:
+        _install_completion(paths)
 
     backend.verify_environment(paths.environment)
     display.stage(5, "Initialization verified")

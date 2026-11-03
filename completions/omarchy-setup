@@ -1,0 +1,73 @@
+# Bash completion for omarchy-setup.
+_omarchy_setup_programs() {
+    omarchy-setup install list 2>/dev/null | awk '/^  [[:alnum:]]/ { print $1 }'
+}
+
+_omarchy_setup_plugins() {
+    omarchy-setup plugin status 2>/dev/null | awk 'NR > 1 { print $1 }'
+}
+
+_omarchy_setup() {
+    local cur command action word
+    COMPREPLY=()
+    cur=${COMP_WORDS[COMP_CWORD]}
+
+    for word in "${COMP_WORDS[@]:1:COMP_CWORD-1}"; do
+        case "$word" in
+            init|deblob|doctor|install|uninstall|upgrade|plugin|dotfiles|theme)
+                command=$word
+                break
+                ;;
+        esac
+    done
+
+    if [[ -z $command ]]; then
+        COMPREPLY=( $(compgen -W "init deblob doctor install uninstall upgrade plugin dotfiles theme --help --version --yes" -- "$cur") )
+        return
+    fi
+
+    if [[ $cur == -* ]]; then
+        case "$command" in
+            init) word="--help --yes --dry-run --quiet --no-progress" ;;
+            deblob) word="--help --yes --dry-run --quiet --no-progress" ;;
+            doctor) word="--help --ui" ;;
+            install) word="--help --install-only --yes --login --default --dry-run --quiet --no-progress" ;;
+            uninstall) word="--help --yes --dry-run --quiet --no-progress" ;;
+            upgrade) word="--help --yes --check --source" ;;
+            plugin) word="--help --yes --dry-run --no-progress" ;;
+            dotfiles) word="--help --yes --dry-run --quiet --no-progress" ;;
+            theme) word="--help --yes --dry-run --no-progress" ;;
+        esac
+        COMPREPLY=( $(compgen -W "$word" -- "$cur") )
+        return
+    fi
+
+    case "$command" in
+        install)
+            COMPREPLY=( $(compgen -W "ls list $(_omarchy_setup_programs)" -- "$cur") )
+            ;;
+        uninstall)
+            COMPREPLY=( $(compgen -W "$(_omarchy_setup_programs)" -- "$cur") )
+            ;;
+        upgrade)
+            COMPREPLY=( $(compgen -W "$(_omarchy_setup_programs)" -- "$cur") )
+            ;;
+        plugin)
+            for word in "${COMP_WORDS[@]:1:COMP_CWORD-1}"; do
+                case "$word" in apply|status|remove|upgrade) action=$word ;; esac
+            done
+            if [[ -z $action ]]; then
+                COMPREPLY=( $(compgen -W "apply status remove upgrade" -- "$cur") )
+            elif [[ $action == apply || $action == upgrade ]]; then
+                COMPREPLY=( $(compgen -W "all $(_omarchy_setup_plugins)" -- "$cur") )
+            elif [[ $action == remove ]]; then
+                COMPREPLY=( $(compgen -W "$(_omarchy_setup_plugins)" -- "$cur") )
+            fi
+            ;;
+        theme)
+            COMPREPLY=( $(compgen -W "bar-fixed bar-floating apply status restore" -- "$cur") )
+            ;;
+    esac
+}
+
+complete -F _omarchy_setup omarchy-setup

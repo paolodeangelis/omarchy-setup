@@ -222,6 +222,26 @@ class ProgramUpgradeTests(unittest.TestCase):
         self.assertNotIn("app.bluebubbles.BlueBubbles", report)
         self.assertNotIn("mamba", report)
 
+    def test_report_summarizes_when_every_installed_program_is_current(self) -> None:
+        report = format_upgrade_status([
+            UpgradeStatus(program("spotify"), True, "1.0", "—", "current"),
+            UpgradeStatus(program("bluebubbles"), True, "2.2", "—", "current"),
+        ], show_source=True)
+
+        self.assertEqual(
+            report,
+            "All automatically upgradable managed programs are up to date.",
+        )
+
+    def test_report_hides_current_programs_when_an_update_exists(self) -> None:
+        report = format_upgrade_status([
+            UpgradeStatus(program("spotify"), True, "1.0", "—", "current"),
+            UpgradeStatus(program("bluebubbles"), True, "2.1", "2.2", "update"),
+        ], show_source=False)
+
+        self.assertNotIn("spotify", report)
+        self.assertIn("bluebubbles", report)
+
     @patch("omarchy_setup.modules.programs.upgrade.curses.curs_set")
     def test_selector_hides_installed_programs_without_known_updates(self, _cursor) -> None:
         statuses = [
