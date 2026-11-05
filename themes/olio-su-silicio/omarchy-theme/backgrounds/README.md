@@ -4,6 +4,10 @@ Each wallpaper image must have a same-stem JSON file. Theme activation validates
 the pair before changing the desktop. Omarchy discovers the image itself, so a
 new valid pair automatically joins the background chooser and rotation.
 
+Untouched source images are kept in `originals/`, which is excluded from the
+wallpaper rotation. Root-level images are the display copies; portrait works
+may be square-cropped there to keep their subject visible on a desktop.
+
 Required JSON fields are `schema_version` (currently `1`), `title`, `artist`,
 `date`, `medium`, `collection`, `source_name`, `source_url`, `rights`, and
 `identification` (`verified` or `unverified`). Optional translated or original
