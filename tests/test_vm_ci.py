@@ -333,6 +333,11 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             guest.index("step 'Install Flatpak prerequisite'"),
             guest.index("step 'Install programs and defaults'"),
         )
+        self.assertIn(
+            "OMARCHY_UPDATE_PACMAN=1 pacman -Syu --needed --noconfirm flatpak",
+            guest,
+        )
+        self.assertIn("step 'Baseline retained after prerequisites' check_version", guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)

@@ -187,7 +187,8 @@ if [[ $PHASE == initial ]]; then
   step 'Repeat bootstrap' "$LAUNCHER" init -y --no-progress
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
-  step 'Install Flatpak prerequisite' sudo -A pacman -S --needed --noconfirm flatpak
+  step 'Install Flatpak prerequisite' sudo -A env OMARCHY_UPDATE_PACMAN=1 pacman -Syu --needed --noconfirm flatpak
+  step 'Baseline retained after prerequisites' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
   step 'Configure Flathub prerequisite' flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
   step 'Managed upgrade source report' "$LAUNCHER" upgrade all --check --source
