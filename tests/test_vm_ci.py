@@ -323,6 +323,8 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
 
     def test_guest_acceptance_is_project_focused(self):
         guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
+        session = guest.split("session() {", 1)[1].split("\n}", 1)[0]
+        self.assertLess(session.index("wait_for_shell"), session.index("quickshell list --all"))
         self.assertNotIn("acceptance-upstream", guest)
         self.assertNotIn("acceptance.d/", guest)
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)

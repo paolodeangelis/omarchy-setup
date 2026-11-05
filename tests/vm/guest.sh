@@ -98,12 +98,12 @@ session() {
     case "$key" in WAYLAND_DISPLAY|HYPRLAND_INSTANCE_SIGNATURE|DISPLAY) export "$key=$value" ;; esac
   done < <(systemctl --user show-environment)
   hyprctl -j monitors | jq -e 'length > 0' >/dev/null
+  wait_for_shell
   export OMARCHY_PATH
   OMARCHY_PATH=$(quickshell list --all | sed -n 's/^ *Config path: \(.*\)\/shell\/shell.qml$/\1/p' | tail -1)
   [[ -n $OMARCHY_PATH ]]
   export QML2_IMPORT_PATH="$OMARCHY_PATH/shell"
   export PATH="$OMARCHY_PATH/bin:$HOME/.local/bin:$PATH"
-  wait_for_shell
 }
 check_version() {
   local expected=$1 actual
