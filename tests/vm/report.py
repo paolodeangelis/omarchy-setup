@@ -13,7 +13,8 @@ def cell(value):
 def render(root, environment):
     lines = ["# Omarchy compatibility results", "",
              f"Baseline: **{cell(environment.get('BASELINE', 'unresolved'))}** · "
-             f"Candidate: **{cell(environment.get('CANDIDATE', 'unresolved'))}**", "",
+             f"Candidate: **{cell(environment.get('CANDIDATE', 'unresolved'))}** · "
+             f"Fresh ISO: **{cell(environment.get('CANDIDATE_ISO_STATUS', 'unresolved'))}**", "",
              "Job results below are aggregates. Individual recorded checks follow separately.", "",
              "| Job | Result |", "|---|---|"]
     for title, key in (("Fast checks", "CHECKS"), ("Release resolution", "RELEASE"),

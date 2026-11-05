@@ -1,6 +1,6 @@
 # omarchy-setup
 
-[![Omarchy 4.0.5](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
+[![Omarchy 4.0.6](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
 
 Personal, reproducible setup and configuration framework for Omarchy.
 
@@ -481,9 +481,9 @@ The same hooks run in GitHub-hosted CI. Hook installation is opt-in per clone.
 ### System checks
 
 Every pushed commit runs one compatibility workflow containing fast project
-checks, a fresh Omarchy 4.0.5 VM, and the WinApps basic compatibility test. If
-the newest official stable release is newer than 4.0.5, the same run adds both
-a fresh candidate VM and a configured 4.0.5-to-candidate upgrade VM. A separate
+checks, a fresh Omarchy 4.0.6 VM, and the WinApps basic compatibility test. If
+the newest official stable release is newer than 4.0.6, the same run adds a
+configured 4.0.6-to-candidate upgrade VM and, once its ISO is published, a fresh candidate VM. A separate
 monthly release check dispatches this complete workflow once for each newly
 detected stable version; later manual runs or commits can retest a failure.
 The VM jobs use the pinned official ISO harness, verified ISO checksums, and an

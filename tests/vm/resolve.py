@@ -44,9 +44,11 @@ def plan(config, mode, latest, baseline=""):
         raise ValueError(f"unreviewed upgrade-drill baseline: {pinned}")
     candidate = pinned if mode == "pinned" else latest.removeprefix("v")
     version(candidate)
+    newer = version(candidate) > version(pinned)
     return {
         "mode": mode, "baseline": pinned, "candidate": candidate,
-        "run": mode == "pinned" or version(candidate) > version(pinned),
+        "run": mode == "pinned" or newer,
+        "upgrade_run": newer,
         "install_version": candidate if mode == "latest" else pinned,
         "harness_commit": config["harness_commit"],
     }
@@ -68,11 +70,19 @@ def main():
     if result["run"]:
         name = f'omarchy-{result["install_version"]}.iso'
         url = f"https://iso.omarchy.org/{name}"
-        parts = fetch(url + ".sha256").split()
-        if not parts:
-            raise ValueError("empty official ISO checksum")
-        checksum = parts[0].lower()
-        if not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
+        try:
+            parts = fetch(url + ".sha256").split()
+        except HTTPError as error:
+            if args.mode == "latest" and error.code == 404:
+                result.update(run=False, candidate_iso_status="unavailable")
+                checksum = None
+            else:
+                raise
+        else:
+            if not parts:
+                raise ValueError("empty official ISO checksum")
+            checksum = parts[0].lower()
+        if checksum is not None and not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
             raise ValueError("invalid official ISO checksum")
         expected_checksum = None
         if result["install_version"] == config["baseline"]:
@@ -81,12 +91,14 @@ def main():
             expected_checksum = config["upgrade_drills"][result["install_version"]]["iso_sha256"]
         if expected_checksum and checksum != expected_checksum:
             raise ValueError("official baseline checksum differs from reviewed checksum")
-        tag = "v" + result["install_version"]
-        ref = json.loads(fetch(f"https://api.github.com/repos/omacom/omarchy/commits/{tag}"))
-        result.update(iso_url=url, iso_name=name, iso_sha256=checksum, upstream_commit=ref["sha"])
-        if args.mode == "upgrade":
-            target = json.loads(fetch(f'https://api.github.com/repos/omacom/omarchy/commits/v{result["candidate"]}'))
-            result["candidate_commit"] = target["sha"]
+        if checksum is not None:
+            tag = "v" + result["install_version"]
+            ref = json.loads(fetch(f"https://api.github.com/repos/omacom/omarchy/commits/{tag}"))
+            result.update(iso_url=url, iso_name=name, iso_sha256=checksum,
+                          upstream_commit=ref["sha"], candidate_iso_status="available")
+            if args.mode == "upgrade":
+                target = json.loads(fetch(f'https://api.github.com/repos/omacom/omarchy/commits/v{result["candidate"]}'))
+                result["candidate_commit"] = target["sha"]
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:

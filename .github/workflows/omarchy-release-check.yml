@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       candidate: ${{ steps.release.outputs.candidate }}
+      candidate_iso_status: ${{ steps.release.outputs.candidate_iso_status }}
       action: ${{ steps.dispatch.outputs.action || steps.already.outputs.action || steps.current.outputs.action }}
     steps:
       - uses: actions/checkout@v5
@@ -27,14 +28,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 tests/vm/resolve.py latest --output release.json
       - uses: actions/cache/restore@v5
-        if: steps.release.outputs.run == 'true'
+        if: steps.release.outputs.upgrade_run == 'true'
         id: dispatched
         with:
           path: .release-dispatched
           key: omarchy-release-dispatched-v2-${{ steps.release.outputs.candidate }}
       - name: Run the complete suite once for the new release
         id: dispatch
-        if: steps.release.outputs.run == 'true' && steps.dispatched.outputs.cache-hit != 'true'
+        if: steps.release.outputs.upgrade_run == 'true' && steps.dispatched.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE: ${{ steps.release.outputs.candidate }}
@@ -44,17 +45,17 @@ jobs:
           echo "$CANDIDATE" > .release-dispatched
           echo 'action=dispatched' >> "$GITHUB_OUTPUT"
       - uses: actions/cache/save@v5
-        if: steps.release.outputs.run == 'true' && steps.dispatched.outputs.cache-hit != 'true'
+        if: steps.release.outputs.upgrade_run == 'true' && steps.dispatched.outputs.cache-hit != 'true'
         with:
           path: .release-dispatched
           key: omarchy-release-dispatched-v2-${{ steps.release.outputs.candidate }}
       - name: Report no new release
         id: current
-        if: steps.release.outputs.run != 'true'
+        if: steps.release.outputs.upgrade_run != 'true'
         run: echo 'action=no-new-release' >> "$GITHUB_OUTPUT"
       - name: Report previously dispatched release
         id: already
-        if: steps.release.outputs.run == 'true' && steps.dispatched.outputs.cache-hit == 'true'
+        if: steps.release.outputs.upgrade_run == 'true' && steps.dispatched.outputs.cache-hit == 'true'
         run: echo 'action=already-dispatched' >> "$GITHUB_OUTPUT"
 
   report:
@@ -68,6 +69,7 @@ jobs:
           RESULT: ${{ needs.detect.result }}
           CANDIDATE: ${{ needs.detect.outputs.candidate }}
           ACTION: ${{ needs.detect.outputs.action }}
+          CANDIDATE_ISO_STATUS: ${{ needs.detect.outputs.candidate_iso_status }}
         run: |
           case "$RESULT" in
             success) display='✅ success' ;;
@@ -81,5 +83,6 @@ jobs:
             echo '|---|---|'
             echo "| Release detection | $display |"
             echo "| Official stable version | ${CANDIDATE:-unresolved} |"
+            echo "| Fresh-install ISO | ${CANDIDATE_ISO_STATUS:-unresolved} |"
             echo "| Action | ${ACTION:-not reached} |"
           } >> "$GITHUB_STEP_SUMMARY"

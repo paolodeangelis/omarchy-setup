@@ -145,6 +145,23 @@ class VmCiTests(unittest.TestCase):
             self.assertFalse(json.loads(output.read_text())["run"])
             fetch.assert_called_once()
 
+    def test_cli_missing_candidate_iso_preserves_upgrade_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "release.json"
+            missing = self.resolve.HTTPError(
+                "https://iso.omarchy.org/omarchy-4.5.0.iso.sha256", 404,
+                "Not Found", {}, None,
+            )
+            with patch.object(sys, "argv", ["resolve", "latest", "--output", str(output)]), \
+                    patch.object(self.resolve, "fetch", side_effect=('{"tag_name":"v4.5.0"}', missing)), \
+                    patch.dict(os.environ, {"GITHUB_OUTPUT": str(Path(directory) / "outputs")}):
+                self.resolve.main()
+            result = json.loads(output.read_text())
+            self.assertFalse(result["run"])
+            self.assertTrue(result["upgrade_run"])
+            self.assertEqual(result["candidate_iso_status"], "unavailable")
+            missing.close()
+
     def test_cli_bad_checksum_never_writes_success(self):
         for checksum in ("", "bad", "0" * 64):
             with self.subTest(checksum=checksum), tempfile.TemporaryDirectory() as directory:
@@ -336,12 +353,15 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         workflow = (
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
-        self.assertIn("name: Omarchy 4.0.5", workflow)
+        releases = json.loads((Path(__file__).parent / "vm/releases.json").read_text())
+        self.assertIn(f"name: Omarchy {releases['baseline']}", workflow)
         self.assertNotIn("upgrade_from:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("mode: pinned", workflow)
         self.assertIn("mode: latest", workflow)
         self.assertIn("mode: upgrade", workflow)
+        self.assertIn("run_fresh_candidate", workflow)
+        self.assertIn("run_upgrade_candidate", workflow)
         self.assertIn("uses: ./.github/workflows/winapps-smoke.yml", workflow)
         self.assertIn("needs.upgrade_candidate.result", workflow)
         self.assertIn("python3 tests/vm/report.py report-input", workflow)
@@ -353,6 +373,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "Unit and integration tests",
             "4.0.3",
             "4.0.4",
+            "Fresh ISO",
             "No acceptance records available",
             "UNVERIFIED",
             "FreeRDP/Notepad/Edge",

@@ -1,4 +1,4 @@
-name: Omarchy 4.0.5
+name: Omarchy 4.0.6
 
 on:
   push:
@@ -75,7 +75,9 @@ jobs:
     outputs:
       baseline: ${{ steps.release.outputs.baseline }}
       candidate: ${{ steps.release.outputs.candidate }}
-      run_candidate: ${{ steps.release.outputs.run }}
+      candidate_iso_status: ${{ steps.release.outputs.candidate_iso_status }}
+      run_fresh_candidate: ${{ steps.release.outputs.run }}
+      run_upgrade_candidate: ${{ steps.release.outputs.upgrade_run }}
     steps:
       - uses: actions/checkout@v5
       - name: Resolve official release and ISO checksum
@@ -102,7 +104,7 @@ jobs:
     needs:
       - checks
       - release
-    if: needs.release.outputs.run_candidate == 'true'
+    if: needs.release.outputs.run_fresh_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
       mode: latest
@@ -114,7 +116,7 @@ jobs:
     needs:
       - checks
       - release
-    if: needs.release.outputs.run_candidate == 'true'
+    if: needs.release.outputs.run_upgrade_candidate == 'true'
     uses: ./.github/workflows/omarchy-system.yml
     with:
       mode: upgrade
@@ -156,6 +158,7 @@ jobs:
       - name: Write compatibility summary
         env:
           CANDIDATE: ${{ needs.release.outputs.candidate }}
+          CANDIDATE_ISO_STATUS: ${{ needs.release.outputs.candidate_iso_status }}
           BASELINE: ${{ needs.release.outputs.baseline }}
           CHECKS: ${{ needs.checks.result }}
           PRE_COMMIT: ${{ needs.checks.outputs.pre_commit }}

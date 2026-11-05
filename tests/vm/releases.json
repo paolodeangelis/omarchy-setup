@@ -1,7 +1,7 @@
 {
-  "baseline": "4.0.5",
-  "baseline_package": "4.0.5-1",
-  "baseline_iso_sha256": "73fd4334f1f67b19cd8a5589f9363173fc3aec07c0a59f198833eaddb66877a1",
+  "baseline": "4.0.6",
+  "baseline_package": "4.0.6-1",
+  "baseline_iso_sha256": "b542db5fecc37395d9af6654a8146ebed225f275ae4d5a6fcf432e40afe7bb88",
   "upgrade_drills": {},
   "harness_commit": "86c07785cb0f63be78edb1349843d5817b5c0e66"
 }
