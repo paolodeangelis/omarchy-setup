@@ -167,6 +167,15 @@ zoom_native_configured() {
   [[ $(xdg-mime query default x-scheme-handler/zoommtg) == Zoom.desktop ]]
   [[ $(xdg-mime query default x-scheme-handler/zoomus) == Zoom.desktop ]]
 }
+program_plans() {
+  local program
+  while read -r program; do
+    "$LAUNCHER" install "$program" -y --dry-run --no-progress
+  done < <(
+    PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -c \
+      'from omarchy_setup.modules.programs import PROGRAMS; print(*[p.name for p in PROGRAMS if p.include_in_all and p.flatpak_id is None], sep="\n")'
+  )
+}
 update_system() {
   timeout --kill-after=30s 2400 "$STATE_ROOT/environment/bin/python" \
     "$SETUP_ROOT/tests/vm/update.py" </dev/null 2>&1 | tee /tmp/omarchy-update.log
@@ -187,17 +196,8 @@ if [[ $PHASE == initial ]]; then
   step 'Repeat bootstrap' "$LAUNCHER" init -y --no-progress
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
-  step 'Install Flatpak prerequisite' sudo -A env OMARCHY_UPDATE_PACMAN=1 pacman -Syu --needed --noconfirm flatpak
-  step 'Baseline retained after prerequisites' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
-  step 'Configure Flathub prerequisite' flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
-  step 'Managed upgrade source report' "$LAUNCHER" upgrade all --check --source
-  step 'Native Zoom integration' zoom_native_configured
+  step 'Program plans on baseline' program_plans
   step 'WinApps preparation plan only' "$LAUNCHER" install winapps -y --install-only --dry-run --no-progress
-  pacman -Q | sort > "$ARTIFACTS/packages-before-repeat.txt"
-  step 'Repeat program installation' "$LAUNCHER" install all -y -d --no-progress
-  pacman -Q | sort > "$ARTIFACTS/packages-after-repeat.txt"
-  step 'Program package idempotency' cmp "$ARTIFACTS/packages-before-repeat.txt" "$ARTIFACTS/packages-after-repeat.txt"
   step 'Core doctor before plugins' "$LAUNCHER" doctor --ui
   plugin_step 'Managed plugins' "$LAUNCHER" plugin apply -y --no-progress
   plugin_step 'Managed plugin status' "$LAUNCHER" plugin status
@@ -259,6 +259,8 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   omarchy-shell shell hide omarchy.menu
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
+  step 'Install Flatpak prerequisite after upgrade' omarchy pkg add flatpak
+  step 'Configure Flathub prerequisite after upgrade' flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   step 'Post-upgrade program installation' "$LAUNCHER" install all -y --no-progress
   step 'Managed upgrade source report after upgrade' "$LAUNCHER" upgrade all --check --source
   step 'Native Zoom integration after upgrade' zoom_native_configured

@@ -121,5 +121,6 @@ These audit findings are not authorization to change the accepted desktop. Repro
   - Run `39159884581` passed setup, hooks, doctor, and shell-log checks on all targets, then exposed a stale visual check for disabled `omarchy.monitor`; the harness now exercises its active `crmne.hyprmoncfg` replacement.
 - [ ] Confirm fresh Omarchy 4.0.6 VM acceptance with the reviewed shell-interface hashes
 - [ ] Run configured 4.0.6 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
+- [ ] Restore full program-install coverage on a historical baseline only if an immutable 4.0.6 package snapshot becomes available; live Arch repositories upgrade it to 4.5.0, so CI plans programs before the upgrade and applies them afterward
   - Run `39157319202` accepted the reviewed interfaces; its 4.0.4 phases showed generic shell readiness precedes the Spaces IPC handler, so acceptance now waits for that specific handler. Confirmation is pending.
   - Run `39161736581` passed both fresh targets, then proved the active 4.0.4 overlay was stale after the 4.0.5 update. Theme activation now installs an official post-update hook that rebuilds the selected bar style; VM confirmation is pending.

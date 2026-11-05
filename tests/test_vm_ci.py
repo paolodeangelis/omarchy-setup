@@ -329,15 +329,8 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
         self.assertIn('$wrapper waiting', guest)
         self.assertIn('Spaces agent IPC did not become ready after 15 seconds', guest)
-        self.assertLess(
-            guest.index("step 'Install Flatpak prerequisite'"),
-            guest.index("step 'Install programs and defaults'"),
-        )
-        self.assertIn(
-            "OMARCHY_UPDATE_PACMAN=1 pacman -Syu --needed --noconfirm flatpak",
-            guest,
-        )
-        self.assertIn("step 'Baseline retained after prerequisites' check_version", guest)
+        self.assertIn("step 'Program plans on baseline' program_plans", guest)
+        self.assertNotIn("pacman -Syu --needed --noconfirm flatpak", guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
@@ -356,8 +349,14 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "deblob -y --dry-run",
             "checks after-upgrade-configured",
             "unittest discover",
+            "Install Flatpak prerequisite after upgrade",
+            "Post-upgrade program installation",
         ):
             self.assertIn(evidence, post_upgrade)
+        initial = guest.split("if [[ $PHASE == initial ]]; then", 1)[1].split(
+            "elif [[ $PHASE == post-upgrade", 1
+        )[0]
+        self.assertNotIn("install all", initial)
 
         workflow = (
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
