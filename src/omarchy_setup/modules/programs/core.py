@@ -368,7 +368,7 @@ PROGRAMS = (
         install_command=("omarchy", "pkg", "add", "telegram-desktop"),
         source="Pacman",
         upgrade_policy="system",
-        login_command=("uwsm-app", "--", "telegram-desktop"),
+        login_command=("uwsm-app", "--", "Telegram"),
     ),
 )
 

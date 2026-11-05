@@ -321,6 +321,11 @@ class ProgramBackendTests(unittest.TestCase):
             ("xdg-mime", "default", "org.mozilla.Thunderbird.desktop", "x-scheme-handler/mailto"),
         )
 
+    def test_telegram_login_uses_the_arch_package_executable(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "telegram")
+
+        self.assertEqual(program.login_command, ("uwsm-app", "--", "Telegram"))
+
     def test_thunderbird_binding_replaces_managed_omamail_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
