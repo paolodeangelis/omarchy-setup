@@ -357,6 +357,8 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             "elif [[ $PHASE == post-upgrade", 1
         )[0]
         self.assertNotIn("install all", initial)
+        self.assertNotIn("deblob -y", initial)
+        self.assertIn("install all -y -d --no-progress", post_upgrade)
 
         workflow = (
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"

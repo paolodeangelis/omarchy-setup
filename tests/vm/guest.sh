@@ -220,9 +220,6 @@ if [[ $PHASE == initial ]]; then
   omarchy-shell shell hide omarchy.menu
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
-  step 'Deblob plan' "$LAUNCHER" deblob -y --dry-run --no-progress
-  step 'Deblob apply' "$LAUNCHER" deblob -y --no-progress
-  step 'Deblob repeat' "$LAUNCHER" deblob -y --no-progress
   step 'Configured desktop checks' checks configured
   if [[ $MODE == upgrade ]]; then
     # Do not reapply our setup before checking the upgraded installation.
@@ -261,7 +258,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   session
   step 'Install Flatpak prerequisite after upgrade' omarchy pkg add flatpak
   step 'Configure Flathub prerequisite after upgrade' flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  step 'Post-upgrade program installation' "$LAUNCHER" install all -y --no-progress
+  step 'Post-upgrade program installation' "$LAUNCHER" install all -y -d --no-progress
   step 'Managed upgrade source report after upgrade' "$LAUNCHER" upgrade all --check --source
   step 'Native Zoom integration after upgrade' zoom_native_configured
   pacman -Q | sort > "$ARTIFACTS/packages-post-upgrade-before-repeat.txt"
