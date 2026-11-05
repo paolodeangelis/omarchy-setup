@@ -187,6 +187,8 @@ if [[ $PHASE == initial ]]; then
   step 'Repeat bootstrap' "$LAUNCHER" init -y --no-progress
   [[ $(stat -c %i "$STATE_ROOT/environment") == "$environment_inode" ]]
   step 'Guest unit and integration suite' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
+  step 'Install Flatpak prerequisite' sudo -A pacman -S --needed --noconfirm flatpak
+  step 'Configure Flathub prerequisite' flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
   step 'Install programs and defaults' "$LAUNCHER" install all -y -d --no-progress
   step 'Managed upgrade source report' "$LAUNCHER" upgrade all --check --source
   step 'Native Zoom integration' zoom_native_configured

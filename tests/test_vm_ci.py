@@ -329,6 +329,10 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
         self.assertIn('$wrapper waiting', guest)
         self.assertIn('Spaces agent IPC did not become ready after 15 seconds', guest)
+        self.assertLess(
+            guest.index("step 'Install Flatpak prerequisite'"),
+            guest.index("step 'Install programs and defaults'"),
+        )
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
