@@ -25,9 +25,12 @@ UWSM_MARKER = "# Managed by omarchy-setup theme"
 SUPPORTED_KEYBOARD_PANEL_SHA256 = {
     "96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d",
     "c8b3b0fd52d8a79469675e925ff851e1dd0588eb1eeb90bd4df004a4c7d72a0a",
+    "e8e0779598c9aaec0fb084a98c60178ab4fcfee87664a41e30f8e481684c4af9",
 }
+OMARCHY_45_KEYBOARD_PANEL_SHA256 = "e8e0779598c9aaec0fb084a98c60178ab4fcfee87664a41e30f8e481684c4af9"
 SUPPORTED_PLUGIN_BAR_API_SHA256 = {
     "91964a42b92c58476a4f961df35148d4c94071344ef1a69eab1563d1496705a7",
+    "182bed4f712c14f50adb78cea6e4d9634ec20d42c40d22fa5eb1d5e18f8f5675",
 }
 
 
@@ -643,6 +646,49 @@ def _write_atomic(path: Path, content: str) -> None:
     os.replace(temporary, path)
 
 
+def _adapt_45_keyboard_panel(source: str) -> str:
+    replacements = {
+        "import QtQuick\n": "import QtQuick\nimport Caelestia.Blobs\n",
+        "  property bool focusPrimed: false\n": (
+            "  property bool focusPrimed: false\n"
+            "  readonly property var barMargins: bar && bar.barMargins !== undefined\n"
+            "    ? bar.barMargins : ({ top: 0, right: 0, bottom: 0, left: 0 })\n"
+            "  readonly property bool liquidEnabled: barPos === \"top\"\n"
+            "    && barMargins.top === 0 && barMargins.right === 0\n"
+            "    && barMargins.bottom === 0 && barMargins.left === 0\n"
+        ),
+        "    color: Commons.Color.popups.background\n": (
+            "    color: root.liquidEnabled ? \"transparent\" : Commons.Color.popups.background\n"
+        ),
+        "  BorderSurface {\n    id: card\n": (
+            "  BlobGroup {\n"
+            "    id: liquidGroup\n"
+            "    color: Commons.Color.popups.background\n"
+            "    smoothing: Math.max(28, Style.cornerRadius * 2)\n"
+            "    cornerFill: true\n"
+            "  }\n\n"
+            "  BlobRect {\n"
+            "    x: 0; y: 0; width: root.screenW; height: root.barThickness\n"
+            "    group: root.liquidEnabled ? liquidGroup : null\n"
+            "    radius: 0\n"
+            "    visible: root.liquidEnabled && card.opacity > 0\n"
+            "  }\n\n"
+            "  BlobRect {\n"
+            "    x: card.x; y: card.y; width: card.width; height: card.height\n"
+            "    group: root.liquidEnabled ? liquidGroup : null\n"
+            "    radius: Style.cornerRadius\n"
+            "    visible: root.liquidEnabled && card.opacity > 0\n"
+            "  }\n\n"
+            "  BorderSurface {\n    id: card\n"
+        ),
+    }
+    for marker, replacement in replacements.items():
+        if source.count(marker) != 1:
+            raise ThemeError("installed Omarchy 4.5 KeyboardPanel has no validated liquid marker")
+        source = source.replace(marker, replacement, 1)
+    return source
+
+
 def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> None:
     digest = _digest(source)
     if digest not in SUPPORTED_KEYBOARD_PANEL_SHA256:
@@ -650,9 +696,13 @@ def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> N
             "installed KeyboardPanel is not a validated Omarchy version; "
             "restore stock or update the omarchy-setup compatibility template"
         )
-    if not paths.keyboard_panel_template.is_file():
-        raise ThemeError("liquid KeyboardPanel template is missing")
-    shutil.copy2(paths.keyboard_panel_template, ui_directory / "KeyboardPanel.qml")
+    target_panel = ui_directory / "KeyboardPanel.qml"
+    if digest == OMARCHY_45_KEYBOARD_PANEL_SHA256:
+        target_panel.write_text(_adapt_45_keyboard_panel(source.read_text()))
+    else:
+        if not paths.keyboard_panel_template.is_file():
+            raise ThemeError("liquid KeyboardPanel template is missing")
+        shutil.copy2(paths.keyboard_panel_template, target_panel)
 
     plugin_api = ui_directory / "PluginBarApi.qml"
     plugin_api_text = plugin_api.read_text()

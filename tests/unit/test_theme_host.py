@@ -32,6 +32,13 @@ class ThemeHostTests(unittest.TestCase):
         self.assertIn("Behavior on height", panel)
         self.assertIn("typeof bar.popoutTransitionFor", panel)
 
+    def test_45_bar_sections_fold_into_the_accepted_three_section_layout(self):
+        bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn("normalized.centerBegin || []", bar)
+        self.assertIn("normalized.centerEnd || []", bar)
+        self.assertIn("normalized.tray || []", bar)
+        self.assertIn("function barSizeFor(screenName)", bar)
+
     def test_bar_commands_preserve_overlay_environment(self):
         source = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         start = source.index("  function run(command) {")

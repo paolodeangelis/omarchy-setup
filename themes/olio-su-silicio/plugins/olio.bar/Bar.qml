@@ -103,6 +103,7 @@ Item {
   // Numeric geometry only: plugin content and service objects never cross the
   // scoped bar facade.
   property var popupTransitionGeometry: null
+  property var popoutCard: null
   property var barDragSource: null
   property var barDragTarget: null
   property var barDragTargetGeometry: null
@@ -318,6 +319,10 @@ Item {
       }
     })
     if (!api) return null
+    if ("_notePopoutCard" in api)
+      api._notePopoutCard = function(card) { if (root) root.notePopoutCard(card) }
+    if ("_popoutCardFor" in api)
+      api._popoutCardFor = function(owner) { return root ? root.popoutCardFor(owner) : null }
     root.bindPluginBarApi(api)
 
     var next = ({})
@@ -597,6 +602,28 @@ Item {
     activePopout = owner
   }
 
+  function popoutSectionOf(owner) {
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (slot && slot.activeItem === owner) return String(slot.region || "")
+    }
+    return ""
+  }
+
+  function notePopoutCard(card) {
+    popoutCard = card ? {
+      screen: String(card.screen || ""), section: popoutSectionOf(activePopout),
+      x: Number(card.x) || 0, y: Number(card.y) || 0,
+      width: Number(card.width) || 0, height: Number(card.height) || 0
+    } : null
+  }
+
+  function popoutCardFor(owner) {
+    var card = popoutCard
+    if (!card || !card.section || card.section !== popoutSectionOf(owner)) return null
+    return { screen: card.screen, x: card.x, y: card.y, width: card.width, height: card.height }
+  }
+
   function reportPopoutGeometry(owner, geometry) {
     if (!liquidStyle || activePopout !== owner || !geometry) return
     var values = [geometry.x, geometry.y, geometry.width, geometry.height]
@@ -624,6 +651,7 @@ Item {
 
   readonly property bool vertical: position === "left" || position === "right"
   readonly property int barSize: vertical ? configuredVerticalSize : configuredHorizontalSize
+  function barSizeFor(screenName) { return barSize }
   // Fixed/liquid is available only while the validated user shell overlay is
   // active. Stock Omarchy is always the safe floating fallback, including
   // after an incompatible update or a failed overlay launch.
@@ -664,8 +692,8 @@ Item {
     var normalized = Util.normalizeLayout(Util.isPlainObject(layout) ? layout : fallbackBarConfig.layout)
     return {
       left:   pinTrayToInner(normalized.left,   "left"),
-      center: pinTrayToInner(normalized.center, "center"),
-      right:  pinTrayToInner(normalized.right,  "right")
+      center: pinTrayToInner((normalized.centerBegin || []).concat(normalized.center || [], normalized.centerEnd || []), "center"),
+      right:  pinTrayToInner((normalized.right || []).concat(normalized.tray || []), "right")
     }
   }
 

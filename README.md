@@ -455,6 +455,22 @@ rolls back safely. Restore only the stock shell explicitly with:
 omarchy-setup theme restore -y
 ```
 
+This is the safe pre-update and emergency-recovery command. It removes the
+active Olio shell override and restarts the stock Omarchy shell; it does not
+uninstall programs or plugins, delete the repository theme, or modify
+`/usr/share/omarchy`. Confirm `omarchy-setup theme status` reports the stock
+shell, then update Omarchy. After the compatibility workflow passes for the
+new release, restore the chosen appearance with either:
+
+```bash
+omarchy-setup theme bar-floating -y
+# or
+omarchy-setup theme bar-fixed -y
+```
+
+If an update was already applied and the custom shell will not start, the same
+`theme restore` command is the minimal recovery path from a terminal.
+
 Interactive `init`, `install`, `deblob`, and `theme` runs show a tqdm progress
 bar with the active step. Redirected output and CI use stable `[step/total]`
 messages; `--quiet` suppresses normal install/bootstrap output.

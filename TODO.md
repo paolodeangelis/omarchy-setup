@@ -82,7 +82,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Validate the local widget-host extension in pinned/latest/upgrade VMs (unit/JavaScript, offscreen QML, and local desktop checks pass; upstream support remains pending)
 - [ ] Investigate Notification Center's DND control separately: its cross-service lookup is outside the own-service permission scope
 - [ ] Verify floating renderer parity and TOML gap/height semantics without retuning accepted geometry
-- [ ] Validate overlay reuse against all relevant upstream changes and verify complete stock restore
+- [ ] Confirm in the 4.0.6 -> 4.5 VM that the new native popup/morph adapter, six-section layout folding, and complete stock-shell restore all work
 - [x] Wait for the previous Quickshell instance to exit before launching a rebuilt overlay; locally verified after the 4.0.5 workstation update
 - [ ] Make doctor detect QML property-assignment errors and distinguish missing evidence from healthy checks
 - [ ] Add real QML/VM acceptance for both styles, third-party previews, service-backed content, keyboard menus, and OSD

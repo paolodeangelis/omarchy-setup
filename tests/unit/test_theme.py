@@ -21,6 +21,7 @@ from omarchy_setup.modules.theme.core import (
     _validate_background_metadata,
     _validate_theme_toml,
     _resolve_palette_references,
+    _adapt_45_keyboard_panel,
 )
 
 
@@ -286,6 +287,41 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(restore_theme(self.paths, self.backend), "restored")
             self.assertEqual(self.backend.active, self.paths.system_omarchy)
             self.assertFalse(self.paths.uwsm_override.exists())
+
+    def test_45_panel_keeps_native_lazy_content_and_morph_with_liquid_surface(self) -> None:
+        source = (
+            "import QtQuick\nimport qs.Commons as Commons\n"
+            "PanelWindow {\n  id: root\n"
+            "  property bool focusPrimed: false\n"
+            "  property Component content: null\n"
+            "  property rect morphFrom: Qt.rect(0, 0, 0, 0)\n"
+            "  BorderSurface {\n    id: card\n"
+            "    color: Commons.Color.popups.background\n"
+            "    borderSpec: root.borderSpec\n  }\n}\n"
+        )
+
+        adapted = _adapt_45_keyboard_panel(source)
+
+        self.assertIn("import Caelestia.Blobs", adapted)
+        self.assertIn("property Component content: null", adapted)
+        self.assertIn("property rect morphFrom:", adapted)
+        self.assertIn("BlobGroup {", adapted)
+        self.assertIn('color: root.liquidEnabled ? "transparent"', adapted)
+
+    def test_45_notification_service_uses_upstream_placement_unchanged(self) -> None:
+        service = self.paths.system_omarchy / "shell/plugins/notifications/Service.qml"
+        service.write_text("QtObject { property int nativeDelivery: 1 }\n")
+        supported = dict(host_integration.SUPPORTED)
+        supported["plugins/notifications/Service.qml"] = {
+            __import__("hashlib").sha256(service.read_bytes()).hexdigest()
+        }
+        with patch.object(host_integration, "SUPPORTED", supported), patch(
+            "omarchy_setup.modules.theme.core.SUPPORTED_KEYBOARD_PANEL_SHA256", {self.digest}
+        ):
+            apply_theme(self.paths, self.backend)
+
+        overlay_service = self.paths.overlay_shell / "plugins/notifications/Service.qml"
+        self.assertEqual(overlay_service.read_text(), service.read_text())
 
     def test_unknown_keyboard_panel_is_rejected_before_activation(self) -> None:
         with self.assertRaisesRegex(ThemeError, "not a validated Omarchy version"):
