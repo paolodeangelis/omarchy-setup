@@ -29,13 +29,41 @@ class DoctorTests(unittest.TestCase):
             "WARN scene: @plugins/bar/Bar.qml[2020:-1]: TypeError: Cannot read property "
             "'pluginBarApiFor' of undefined (exception occurred during delayed function evaluation)"
         )
+        popup_card_startup = "WARN scene: @Ui/PopupCard.qml[35:3]: Unable to assign [undefined] to double"
 
         suspicious, known_stock = shell_log_findings(
             f"{known}\n{custom}\n{battery}\n{media}\n{delayed_bar_reload}\n"
+            f"{popup_card_startup}\n"
         )
 
         self.assertEqual(suspicious, [custom])
-        self.assertEqual(known_stock, [known, battery, media, delayed_bar_reload])
+        self.assertEqual(known_stock, [
+            known, battery, media, delayed_bar_reload, popup_card_startup,
+        ])
+
+    def test_checks_accept_45_structured_menu_and_precise_media_bindings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            bindings = home / ".config/omarchy/default/hypr/bindings"
+            bindings.mkdir(parents=True)
+            (bindings / "utilities.lua").write_text(
+                'o.bind("SUPER + ESCAPE", "System menu", { menu = "system" })\n'
+            )
+            (bindings / "media.lua").write_text(
+                'o.bind("ALT + XF86AudioRaiseVolume", "Volume", "omarchy-audio-output-volume +1")\n'
+                'o.bind("ALT + XF86MonBrightnessUp", "Brightness", "omarchy-brightness-display +1%")\n'
+            )
+
+            def runner(command, environment=None):
+                if command == ("quickshell", "list", "--all"):
+                    return 1, "not running"
+                if command[0] == "journalctl":
+                    return 0, "normal startup"
+                return 1, "unavailable"
+
+            checks = {check.name: check for check in collect_checks(runner=runner, home=home)}
+            self.assertTrue(checks["system menu binding"].ok)
+            self.assertTrue(checks["media bindings"].ok)
 
     def test_checks_live_shell_and_critical_interfaces(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

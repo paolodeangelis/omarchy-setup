@@ -45,6 +45,10 @@ KNOWN_PANEL_STARTUP_WARNINGS = (
         r"\(exception occurred during delayed function evaluation\)",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"@Ui/PopupCard\.qml\[35:3\]: Unable to assign \[undefined\] to double",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -113,12 +117,14 @@ def collect_checks(*, runner: Runner = _default_runner, home: Path | None = None
     ]
     utility = next((path for path in binding_files if path.is_file()), None)
     utility_text = utility.read_text(errors="replace") if utility else ""
-    checks.append(Check("system menu binding", "SUPER + ESCAPE" in utility_text and "omarchy-menu toggle system" in utility_text, str(utility or "missing")))
+    menu_route = "omarchy-menu toggle system" in utility_text or 'menu = "system"' in utility_text
+    checks.append(Check("system menu binding", "SUPER + ESCAPE" in utility_text and menu_route, str(utility or "missing")))
 
     media_files = [home / ".config/omarchy/default/hypr/bindings/media.lua", Path("/usr/share/omarchy/default/hypr/bindings/media.lua")]
     media = next((path for path in media_files if path.is_file()), None)
     media_text = media.read_text(errors="replace") if media else ""
-    checks.append(Check("media bindings", "omarchy-audio-output-volume raise" in media_text and "omarchy-brightness-display" in media_text, str(media or "missing")))
+    volume_route = "omarchy-audio-output-volume raise" in media_text or "omarchy-audio-output-volume +" in media_text
+    checks.append(Check("media bindings", volume_route and "omarchy-brightness-display" in media_text, str(media or "missing")))
 
     for command in ("omarchy-menu", "omarchy-osd", "omarchy-audio-output-volume"):
         checks.append(Check(command, shutil.which(command) is not None, shutil.which(command) or "not found"))
