@@ -52,3 +52,28 @@ wait_for_shell_path() {
     sleep "$delay"
   done
 }
+
+summon_menu_when_ready() {
+  local attempts=${1:-50} delay=${2:-0.3} attempt output
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if output=$(omarchy-shell shell summon omarchy.menu '{}' 2>&1); then
+      return 0
+    fi
+
+    case "$output" in
+      *'omarchy-shell is not responding'*|*'omarchy-shell is not running'*|*'The name is not activatable'*)
+        if ((attempt == attempts)); then
+          printf 'Omarchy menu did not become ready after %s attempts: %s\n' \
+            "$attempts" "$output" >&2
+          return 1
+        fi
+        sleep "$delay"
+        ;;
+      *)
+        printf '%s\n' "$output" >&2
+        return 1
+        ;;
+    esac
+  done
+}

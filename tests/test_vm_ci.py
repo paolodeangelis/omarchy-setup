@@ -160,6 +160,29 @@ class VmCiTests(unittest.TestCase):
             self.assertEqual(completed.stdout.strip(), "/usr/share/omarchy")
             self.assertEqual(state.read_text().strip(), "3")
 
+    def test_stock_menu_summon_retries_only_startup_failures(self):
+        helper = Path(__file__).parent / "vm" / "shell-readiness.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "omarchy-shell"
+            state = Path(directory) / "calls"
+            command.write_text(
+                "#!/bin/bash\n"
+                f"state={str(state)!r}\n"
+                "count=0; [[ ! -f $state ]] || read -r count < $state\n"
+                "count=$((count + 1)); printf '%s\\n' \"$count\" > $state\n"
+                "if ((count == 1)); then echo 'omarchy-shell is not responding' >&2; exit 1; fi\n"
+                "if ((count == 2)); then echo 'Call failed: The name is not activatable' >&2; exit 1; fi\n"
+                "exit 0\n"
+            )
+            command.chmod(0o755)
+            env = {**os.environ, "PATH": f"{directory}:{os.environ['PATH']}"}
+            completed = subprocess.run(
+                ["bash", "-c", f"source {helper}; summon_menu_when_ready 3 0"],
+                env=env, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(state.read_text().strip(), "3")
+
     def test_cli_skip_does_not_fetch_iso(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "release.json"
@@ -373,6 +396,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertIn('Spaces agent IPC did not become ready after 15 seconds', guest)
         self.assertIn("step 'Program plans on baseline' program_plans", guest)
         self.assertIn('step "Desktop surfaces: $stage"', guest)
+        self.assertEqual(guest.count("summon_menu_when_ready"), 2)
         self.assertIn('step "Hyprland config: $stage"', guest)
         self.assertNotIn("pacman -Syu --needed --noconfirm flatpak", guest)
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()

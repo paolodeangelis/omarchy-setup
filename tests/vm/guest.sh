@@ -218,7 +218,7 @@ if [[ $PHASE == initial ]]; then
   step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
-  omarchy-shell shell summon omarchy.menu '{}'
+  summon_menu_when_ready
   sleep 1
   grim "$ARTIFACTS/restored-menu.png"
   omarchy-shell shell hide omarchy.menu
@@ -254,7 +254,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
-  omarchy-shell shell summon omarchy.menu '{}'
+  summon_menu_when_ready
   sleep 1
   grim "$ARTIFACTS/restored-menu-post-upgrade.png"
   omarchy-shell shell hide omarchy.menu
