@@ -20,6 +20,10 @@ class ThemeHostTests(unittest.TestCase):
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)
 
+    def test_registry_loader_never_receives_an_undefined_component(self):
+        bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn("w[registryName] && w[registryName].component ? w[registryName].component : null", bar)
+
     def test_fixed_popups_share_numeric_transition_geometry(self):
         source = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         self.assertIn("function reportPopoutGeometry(owner, geometry)", source)

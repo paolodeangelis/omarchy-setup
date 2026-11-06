@@ -364,6 +364,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
         self.assertIn('run("omarchy-shell", "shell", "hide", "omarchy.menu")', desktop)
+        self.assertIn('capture_compositor_state(output, "system-menu")', desktop)
         self.assertNotIn('"omarchy.monitor"', desktop)
 
     def test_upgrade_rechecks_all_managed_surfaces_and_winapps_layer(self):

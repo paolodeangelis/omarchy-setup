@@ -103,6 +103,14 @@ class ReportTests(unittest.TestCase):
             self.assertIn('Moving third-party plugin failures: 1', report)
             self.assertNotIn('Core utility/system failures:', report)
 
+    def test_report_surfaces_exact_runtime_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'guest.log').write_text('RuntimeError: system menu obscured; inspect clients\n')
+            report = render(root, {})
+            self.assertIn('Exact terminal failures', report)
+            self.assertIn('system menu obscured; inspect clients', report)
+
     def test_no_artifacts_never_claims_guest_success(self):
         with tempfile.TemporaryDirectory() as directory:
             report = render(Path(directory), {})

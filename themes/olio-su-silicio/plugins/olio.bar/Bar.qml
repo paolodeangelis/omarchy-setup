@@ -1961,7 +1961,7 @@ Item {
       var w = root.barWidgetRegistry.widgets
       if (customType) return null
       var registryName = root.canonicalWidgetId(moduleName)
-      return w[registryName] ? w[registryName].component : null
+      return w[registryName] && w[registryName].component ? w[registryName].component : null
     }
     readonly property bool qmlCustom: customType === "qml"
     readonly property bool commandCustom: customType === "command"

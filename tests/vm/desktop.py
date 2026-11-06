@@ -26,6 +26,11 @@ def current_boot_shell_log():
     return run("journalctl", "--user", "-b", "-t", "omarchy-shell", "--no-pager", "-o", "cat")
 
 
+def capture_compositor_state(output, label):
+    (output / f"{label}-clients.json").write_text(run("hyprctl", "clients", "-j"))
+    (output / f"{label}-layers.json").write_text(run("hyprctl", "layers", "-j"))
+
+
 def text_visible(text, expected):
     """Match OCR text without treating capitalization noise as a UI failure."""
     return expected.casefold() in text.casefold()
@@ -73,6 +78,11 @@ def main():
     run("systemd-detect-virt", "--vm")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
+    # A submenu close returns to the parent launcher; hide the whole surface so
+    # earlier acceptance stages cannot obstruct this stage's screenshots.
+    run("omarchy-shell", "shell", "hide", "omarchy.menu")
+    time.sleep(1)
+    capture_compositor_state(output, "before-panels")
     revisions = {}
     for directory in (Path.home() / ".config/omarchy/plugins").iterdir():
         if (directory / ".git").exists():
@@ -110,10 +120,11 @@ def main():
         time.sleep(2)
         menu = output / "system-menu.png"
         run("grim", str(menu))
+        capture_compositor_state(output, "system-menu")
         menu_text = run("tesseract", str(menu), "stdout")
         (output / "system-menu-ocr.txt").write_text(menu_text)
         if not text_visible(menu_text, "Shutdown"):
-            raise RuntimeError("system menu content not visible; inspect screenshot/OCR")
+            raise RuntimeError("system menu content not visible; inspect system-menu.png, OCR, clients and layers")
     finally:
         run("omarchy-menu", "close")
         run("omarchy-shell", "shell", "hide", "omarchy.menu")

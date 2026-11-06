@@ -65,10 +65,17 @@ def render(root, environment):
     for problem in problems:
         lines.append(f"- {cell(problem)}")
     warnings = collections.Counter()
+    runtime_errors = collections.Counter()
     for path in sorted(root.rglob("guest.log")):
         for line in path.read_text(errors="replace").splitlines():
             if "[WARN]" in line or "warning:" in line.lower() or "suspicious line(s)" in line:
                 warnings[line.strip()] += 1
+            if "RuntimeError:" in line:
+                runtime_errors[line.strip()] += 1
+    if runtime_errors:
+        lines += ["", "### Exact terminal failures", ""]
+        for message, count in runtime_errors.most_common(20):
+            lines.append(f"- {count}× {cell(message)}")
     if warnings:
         lines += ["", "<details><summary>Guest warnings and shell-log assessments (occurrence counts)</summary>", ""]
         for message, count in warnings.most_common(40):
