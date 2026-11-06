@@ -16,6 +16,11 @@ class ThemeHostTests(unittest.TestCase):
         self.assertIn("if (!target || !root) return", bar)
         self.assertIn("if (!root || !slot) return", bar)
         self.assertIn('if (!root.shell || typeof root.shell.createBarWidget !== "function") return', bar)
+        self.assertEqual(
+            bar.count("Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })"),
+            3,
+        )
+        self.assertNotIn("Qt.callLater(hostedLoader.reload)", bar)
         hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)

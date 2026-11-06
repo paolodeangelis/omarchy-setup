@@ -1995,10 +1995,10 @@ Item {
 
     Component.onCompleted: {
       root.registerModuleSlot(slot)
-      Qt.callLater(hostedLoader.reload)
+      Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
     }
-    onRegistryComponentChanged: Qt.callLater(hostedLoader.reload)
-    onUseHostedWidgetChanged: Qt.callLater(hostedLoader.reload)
+    onRegistryComponentChanged: Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
+    onUseHostedWidgetChanged: Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
     Component.onDestruction: {
       if (root.barDragSource === slot) root.clearBarDrag()
       root.unregisterModuleSlot(slot)

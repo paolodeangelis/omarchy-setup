@@ -41,7 +41,7 @@ printf 'USERNAME=winapps-ci\nPASSWORD=%s\n' "$WINAPPS_CI_PASSWORD" \
   >"$CONFIG/credentials.env"
 chmod 0600 "$CONFIG/credentials.env" "$CONFIG/winapps.conf" "$CONFIG/compose.yaml"
 
-export WINAPPS_RAM_SIZE=4G WINAPPS_CPU_CORES=2 WINAPPS_DISK_SIZE=64G
+export WINAPPS_RAM_SIZE=6G WINAPPS_CPU_CORES=4 WINAPPS_DISK_SIZE=64G
 export WINAPPS_AUTOLOGIN=N
 podman pull "$IMAGE"
 podman image inspect "$IMAGE" --format '{{.Digest}}' \
