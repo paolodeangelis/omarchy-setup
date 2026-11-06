@@ -353,6 +353,8 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertNotIn("acceptance-upstream", guest)
         self.assertNotIn("acceptance.d/", guest)
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
+        self.assertIn("step 'Keep acceptance session awake' omarchy toggle idle stay-awake", guest)
+        self.assertIn("omarchy toggle idle allow-idle", guest)
         self.assertIn('$STATE_ROOT/bin/omarchy-spaces-agent', guest)
         self.assertIn('$wrapper waiting', guest)
         self.assertIn('Spaces agent IPC did not become ready after 15 seconds', guest)

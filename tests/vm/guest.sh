@@ -87,6 +87,7 @@ cleanup() {
   pacman -Q > "$ARTIFACTS/packages-$PHASE.txt" || true
   grim "$ARTIFACTS/final-$PHASE.png" || true
   printf '%s\n' "$result" > "$ARTIFACTS/exit-$PHASE.txt"
+  omarchy toggle idle allow-idle >/dev/null 2>&1 || true
   sudo -k || true
   exit "$result"
 }
@@ -179,6 +180,7 @@ update_system() {
   timeout --kill-after=30s 2400 "$STATE_ROOT/environment/bin/python" \
     "$SETUP_ROOT/tests/vm/update.py" </dev/null 2>&1 | tee /tmp/omarchy-update.log
 }
+step 'Keep acceptance session awake' omarchy toggle idle stay-awake
 if [[ $PHASE == initial ]]; then
   step 'Installed baseline version' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
   session
