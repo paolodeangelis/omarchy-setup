@@ -353,7 +353,10 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             desktop.close_desktop_clients()
         self.assertEqual(
             run.call_args_list,
-            [call("hyprctl", "clients", "-j"), call("hyprctl", "dispatch", "closewindow", "address:0x1")],
+            [
+                call("hyprctl", "clients", "-j"),
+                call("hyprctl", "dispatch", 'hl.dsp.window.close({ window = "address:0x1" })'),
+            ],
         )
 
     def test_guest_acceptance_is_project_focused(self):

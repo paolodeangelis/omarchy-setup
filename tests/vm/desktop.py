@@ -35,7 +35,7 @@ def close_desktop_clients():
     """Leave the disposable guest clear so clients cannot cover shell layers."""
     for client in json.loads(run("hyprctl", "clients", "-j")):
         if address := client.get("address"):
-            run("hyprctl", "dispatch", "closewindow", f"address:{address}")
+            run("hyprctl", "dispatch", f'hl.dsp.window.close({{ window = "address:{address}" }})')
 
 
 def text_visible(text, expected):
