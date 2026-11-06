@@ -119,6 +119,7 @@ These audit findings are not authorization to change the accepted desktop. Repro
 - [ ] Establish Omarchy 4.0.6 disposable VM execution through focused acceptance on the GitHub-hosted KVM runner
 - [ ] Complete focused VM acceptance: theme modes/companions, deterministic panels/menu/OSD, restore, idempotency and actual deblob; remove dependency on unrelated Omarchy product/live-weather tests
   - Run `39159884581` passed setup, hooks, doctor, and shell-log checks on all targets, then exposed a stale visual check for disabled `omarchy.monitor`; the harness now exercises its active `crmne.hyprmoncfg` replacement.
+  - Run `42228153858` proved `omarchy-menu close` left the parent launcher mapped between visual stages; acceptance now hides the complete shell surface before continuing. Confirmation is pending.
 - [ ] Confirm fresh Omarchy 4.0.6 VM acceptance with the reviewed shell-interface hashes
 - [ ] Run configured 4.0.6 -> candidate-release upgrade-path VM test; fresh installation alone cannot certify workstation updates
 - [ ] Restore full program-install coverage on a historical baseline only if an immutable 4.0.6 package snapshot becomes available; live Arch repositories upgrade it to 4.5.0, so CI plans programs before the upgrade and applies them afterward

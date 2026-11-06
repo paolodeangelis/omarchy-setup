@@ -116,6 +116,8 @@ def main():
             raise RuntimeError("system menu content not visible; inspect screenshot/OCR")
     finally:
         run("omarchy-menu", "close")
+        run("omarchy-shell", "shell", "hide", "omarchy.menu")
+        time.sleep(1)
 
     osd = subprocess.Popen(("omarchy-osd", "-i", "volume-high", "-p", "50", "-d", "1200"))
     time.sleep(0.35)

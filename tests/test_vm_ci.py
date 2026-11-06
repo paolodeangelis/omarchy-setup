@@ -363,6 +363,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         desktop = (Path(__file__).parent / "vm" / "desktop.py").read_text()
         for surface in ("omarchy.weather", "omarchy.network", "omarchy.audio", "crmne.hyprmoncfg", "system-menu.png", "volume-osd.png"):
             self.assertIn(surface, desktop)
+        self.assertIn('run("omarchy-shell", "shell", "hide", "omarchy.menu")', desktop)
         self.assertNotIn('"omarchy.monitor"', desktop)
 
     def test_upgrade_rechecks_all_managed_surfaces_and_winapps_layer(self):
