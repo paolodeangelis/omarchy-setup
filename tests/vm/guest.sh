@@ -123,8 +123,11 @@ checks() {
   session
   mkdir -p "$ARTIFACTS/$stage"
   plugin_step "Doctor after plugin integration: $stage" "$LAUNCHER" doctor --ui
-  "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage"
+  step "Desktop surfaces: $stage" "$STATE_ROOT/environment/bin/python" "$SETUP_ROOT/tests/vm/desktop.py" "$ARTIFACTS/$stage"
   record_plugin_results "$ARTIFACTS/$stage/plugin-results.json"
+  step "Hyprland config: $stage" config_clean
+}
+config_clean() {
   [[ -z $(hyprctl configerrors) ]]
 }
 agent_hooks_configured() {
@@ -207,7 +210,7 @@ if [[ $PHASE == initial ]]; then
     sequence=$((sequence + 1))
     step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
     plugin_step "Agent hook configuration $sequence/$style" agent_hooks_configured
-    step "Desktop checks $sequence/$style" checks "$sequence-$style"
+    checks "$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
@@ -221,7 +224,7 @@ if [[ $PHASE == initial ]]; then
   omarchy-shell shell hide omarchy.menu
   "$LAUNCHER" theme bar-fixed -y --no-progress
   session
-  step 'Configured desktop checks' checks configured
+  checks configured
   if [[ $MODE == upgrade ]]; then
     # Do not reapply our setup before checking the upgraded installation.
     step 'Configured baseline version before update' check_version "$(jq -r .install_version "$VM_TEST_DIR/run.json")"
@@ -235,7 +238,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   step 'Candidate version after reboot' check_version "$(jq -r .candidate "$VM_TEST_DIR/run.json")"
   UPSTREAM_TESTS="$UPSTREAM_TESTS/candidate/test"
   authorize
-  step 'Desktop after reboot before reapply' checks after-upgrade-before-reapply
+  checks after-upgrade-before-reapply
   plugin_step 'Managed plugins after upgrade' "$LAUNCHER" plugin apply -y --no-progress
   plugin_step 'Managed plugin status after upgrade' "$LAUNCHER" plugin status
   sequence=0
@@ -243,7 +246,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
     sequence=$((sequence + 1))
     step "Theme $sequence/$style" "$LAUNCHER" theme "bar-$style" -y --no-progress
     plugin_step "Agent hook configuration $sequence/$style" agent_hooks_configured
-    step "Desktop checks $sequence/$style" checks "after-upgrade-$sequence-$style"
+    checks "after-upgrade-$sequence-$style"
     cp "$STATE_ROOT/themes/olio-su-silicio/state.json" "$ARTIFACTS/state-before-post-upgrade.json"
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before-post-upgrade.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
@@ -270,7 +273,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
   step 'Deblob plan' "$LAUNCHER" deblob -y --dry-run --no-progress
   step 'Deblob apply' "$LAUNCHER" deblob -y --no-progress
   step 'Deblob repeat' "$LAUNCHER" deblob -y --no-progress
-  step 'Configured desktop checks after upgrade' checks after-upgrade-configured
+  checks after-upgrade-configured
   step 'Guest unit and integration suite after upgrade' env PYTHONPATH="$SETUP_ROOT/src" "$STATE_ROOT/environment/bin/python" -m unittest discover -s "$SETUP_ROOT/tests" -t "$SETUP_ROOT" -v
 else
   echo "Invalid phase/mode $PHASE/$MODE"; exit 1
