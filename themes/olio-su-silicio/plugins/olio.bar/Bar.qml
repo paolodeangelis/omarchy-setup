@@ -2019,7 +2019,7 @@ Item {
     Loader {
       id: componentLoader
       active: !slot.qmlCustom && !slot.registered
-      sourceComponent: slot.commandCustom ? customCommandModuleComponent : emptyModuleComponent
+      sourceComponent: active ? ((slot.commandCustom ? customCommandModuleComponent : emptyModuleComponent) || null) : null
       anchors.fill: parent
       opacity: slot.dragSource ? 0.22 : 1.0
       onLoaded: {

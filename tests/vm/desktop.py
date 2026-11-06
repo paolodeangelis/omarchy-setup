@@ -81,6 +81,7 @@ def main():
     # A submenu close returns to the parent launcher; hide the whole surface so
     # earlier acceptance stages cannot obstruct this stage's screenshots.
     run("omarchy-shell", "shell", "hide", "omarchy.menu")
+    run("hyprctl", "dispatch", "workspace", "9")
     time.sleep(1)
     capture_compositor_state(output, "before-panels")
     revisions = {}

@@ -365,6 +365,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             self.assertIn(surface, desktop)
         self.assertIn('run("omarchy-shell", "shell", "hide", "omarchy.menu")', desktop)
         self.assertIn('capture_compositor_state(output, "system-menu")', desktop)
+        self.assertIn('run("hyprctl", "dispatch", "workspace", "9")', desktop)
         self.assertNotIn('"omarchy.monitor"', desktop)
 
     def test_upgrade_rechecks_all_managed_surfaces_and_winapps_layer(self):
