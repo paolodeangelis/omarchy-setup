@@ -112,7 +112,8 @@ class VmCiTests(unittest.TestCase):
                 f"state={str(state)!r}\n"
                 "count=0; [[ ! -f $state ]] || read -r count < $state\n"
                 "count=$((count + 1)); printf '%s\\n' \"$count\" > $state\n"
-                "if ((count < 3)); then echo 'omarchy-shell is not responding' >&2; exit 1; fi\n"
+                "if ((count == 1)); then echo 'omarchy-shell is not running' >&2; exit 1; fi\n"
+                "if ((count == 2)); then echo 'omarchy-shell is not responding' >&2; exit 1; fi\n"
                 "exit 0\n"
             )
             command.chmod(0o755)
@@ -134,6 +135,30 @@ class VmCiTests(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("permission denied", completed.stderr)
             self.assertFalse(state.exists())
+
+    def test_shell_discovery_retries_until_active_path_is_listed(self):
+        helper = Path(__file__).parent / "vm" / "shell-readiness.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "quickshell"
+            state = Path(directory) / "calls"
+            command.write_text(
+                "#!/bin/bash\n"
+                f"state={str(state)!r}\n"
+                "count=0; [[ ! -f $state ]] || read -r count < $state\n"
+                "count=$((count + 1)); printf '%s\\n' \"$count\" > $state\n"
+                "if ((count == 1)); then echo 'omarchy-shell is not running' >&2; exit 1; fi\n"
+                "if ((count == 2)); then exit 0; fi\n"
+                "echo '  Config path: /usr/share/omarchy/shell/shell.qml'\n"
+            )
+            command.chmod(0o755)
+            env = {**os.environ, "PATH": f"{directory}:{os.environ['PATH']}"}
+            completed = subprocess.run(
+                ["bash", "-c", f"source {helper}; wait_for_shell_path 3 0"],
+                env=env, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout.strip(), "/usr/share/omarchy")
+            self.assertEqual(state.read_text().strip(), "3")
 
     def test_cli_skip_does_not_fetch_iso(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -324,7 +349,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
     def test_guest_acceptance_is_project_focused(self):
         guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
         session = guest.split("session() {", 1)[1].split("\n}", 1)[0]
-        self.assertLess(session.index("wait_for_shell"), session.index("quickshell list --all"))
+        self.assertLess(session.index("wait_for_shell_path"), session.rindex("wait_for_shell"))
         self.assertNotIn("acceptance-upstream", guest)
         self.assertNotIn("acceptance.d/", guest)
         self.assertIn('grim "$ARTIFACTS/stock-desktop.png"', guest)
