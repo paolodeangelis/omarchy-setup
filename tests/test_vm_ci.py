@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 import json
 import os
 import subprocess
@@ -346,6 +346,16 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
         self.assertEqual(desktop.notification_crop_geometry(1280, 800), "420x250+860+100")
         self.assertEqual(desktop.notification_crop_geometry(1920, 1080), "630x338+1290+135")
 
+    def test_desktop_visuals_close_existing_guest_clients(self):
+        desktop = module("desktop")
+        clients = '[{"address":"0x1"},{"address":""},{}]'
+        with patch.object(desktop, "run", side_effect=[clients, "ok"]) as run:
+            desktop.close_desktop_clients()
+        self.assertEqual(
+            run.call_args_list,
+            [call("hyprctl", "clients", "-j"), call("hyprctl", "dispatch", "closewindow", "address:0x1")],
+        )
+
     def test_guest_acceptance_is_project_focused(self):
         guest = (Path(__file__).parent / "vm" / "guest.sh").read_text()
         session = guest.split("session() {", 1)[1].split("\n}", 1)[0]
@@ -367,6 +377,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             self.assertIn(surface, desktop)
         self.assertIn('run("omarchy-shell", "shell", "hide", "omarchy.menu")', desktop)
         self.assertIn('capture_compositor_state(output, "system-menu")', desktop)
+        self.assertIn("close_desktop_clients()", desktop)
         self.assertIn('workspace = "5"', desktop)
         self.assertNotIn('"omarchy.monitor"', desktop)
 

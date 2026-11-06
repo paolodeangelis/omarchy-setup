@@ -31,6 +31,13 @@ def capture_compositor_state(output, label):
     (output / f"{label}-layers.json").write_text(run("hyprctl", "layers", "-j"))
 
 
+def close_desktop_clients():
+    """Leave the disposable guest clear so clients cannot cover shell layers."""
+    for client in json.loads(run("hyprctl", "clients", "-j")):
+        if address := client.get("address"):
+            run("hyprctl", "dispatch", "closewindow", f"address:{address}")
+
+
 def text_visible(text, expected):
     """Match OCR text without treating capitalization noise as a UI failure."""
     return expected.casefold() in text.casefold()
@@ -78,6 +85,7 @@ def main():
     run("systemd-detect-virt", "--vm")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
+    close_desktop_clients()
     # A submenu close returns to the parent launcher; hide the whole surface so
     # earlier acceptance stages cannot obstruct this stage's screenshots.
     run("omarchy-shell", "shell", "hide", "omarchy.menu")
