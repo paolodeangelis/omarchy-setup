@@ -436,7 +436,7 @@ ssh_guest "OMARCHY_PATH=/usr/share/omarchy OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-a
             Path(__file__).parents[1] / ".github/workflows/omarchy-tests.yml"
         ).read_text()
         releases = json.loads((Path(__file__).parent / "vm/releases.json").read_text())
-        self.assertIn(f"name: Omarchy {releases['baseline']}", workflow)
+        self.assertIn(f"name: Omarchy {releases['workstation']}", workflow)
         self.assertNotIn("upgrade_from:", workflow)
         self.assertIn("push:", workflow)
         self.assertIn("mode: pinned", workflow)

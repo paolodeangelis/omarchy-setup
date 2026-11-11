@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from omarchy_setup.cli import build_parser
 from omarchy_setup.modules.plugins.core import (
@@ -72,6 +73,12 @@ class FakeBackend:
     def configure_omamail_default(self, plugin_dir: Path, open_key: str, compose_key: str) -> None:
         self.calls.append(("configure_omamail_default", plugin_dir.name, open_key, compose_key))
 
+    def configure_display_binding(self) -> None:
+        self.calls.append(("configure_display_binding",))
+
+    def configure_spotlight_binding(self, plugin_dir: Path) -> None:
+        self.calls.append(("configure_spotlight_binding", plugin_dir.name))
+
 
 class PluginTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -100,10 +107,18 @@ class PluginTests(unittest.TestCase):
         battery = plugins["aabulkhairov.battery-insights"]
         monitors = plugins["crmne.hyprmoncfg"]
         media = plugins["omarchy.media"]
+        elsewhen = plugins["omarchy.elsewhen"]
         mail = plugins["omamail"]
         vpn = plugins["io.github.grichard99.omaproton-vpn"]
         alternative_vpn = plugins["jkoestinger.vpn"]
-        notifications = plugins["jankeesvw.notification-center"]
+        notifications = plugins["shavanced.notification-center"]
+        old_notifications = plugins["jankeesvw.notification-center"]
+        tray = plugins["omarchy.tray"]
+        old_tray = plugins["io.github.tyrichards.tray"]
+        hardware_monitor = plugins["zoltanf.hw-monitor"]
+        old_system_monitor = plugins["harshith.system-monitor"]
+        github = plugins["robzolkos.github"]
+        spotlight = plugins["io.github.maajix.spotlight"]
 
         self.assertEqual((radar.section, radar.after), ("center", "omarchy.weather"))
         self.assertEqual(radar.replaces, ("com.omastorm.radar",))
@@ -116,25 +131,46 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(monitors.user_services, ("hyprmoncfgd.service",))
         self.assertEqual(
             (notifications.section, notifications.after),
-            ("right", "crmne.hyprmoncfg"),
+            ("right", "robzolkos.github"),
         )
+        self.assertFalse(notifications.enabled)
+        self.assertEqual(old_notifications.replaces, ("shavanced.notification-center",))
+        self.assertEqual((tray.section, tray.after), ("right", "crmne.hyprmoncfg"))
+        self.assertTrue(tray.builtin)
+        self.assertEqual(tray.replaces, ("io.github.tyrichards.tray",))
+        self.assertFalse(old_tray.enabled)
+        self.assertEqual((hardware_monitor.section, hardware_monitor.after), ("right", "omarchy.tray"))
+        self.assertEqual(hardware_monitor.replaces, ("harshith.system-monitor",))
+        self.assertFalse(old_system_monitor.enabled)
+        self.assertEqual((github.section, github.after), ("right", "zoltanf.hw-monitor"))
+        self.assertEqual((spotlight.section, spotlight.after), (None, None))
         self.assertTrue(media.builtin)
         self.assertIsNone(media.url)
         self.assertEqual((media.section, media.after), ("left", "tornikegomareli.spaces"))
+        self.assertTrue(elsewhen.builtin)
+        self.assertIsNone(elsewhen.url)
+        self.assertEqual((elsewhen.section, elsewhen.after), ("center", "omarchy.clock"))
         self.assertEqual((mail.section, mail.after), ("right", "omarchy.agents"))
         self.assertFalse(mail.enabled)
-        self.assertEqual((vpn.section, vpn.after), ("right", "omarchy.network"))
+        self.assertEqual((vpn.section, vpn.after), (None, None))
         self.assertFalse(vpn.enabled)
-        self.assertEqual(vpn.replaces, ("jkoestinger.vpn",))
-        self.assertEqual(
-            (alternative_vpn.section, alternative_vpn.after),
-            ("right", "omarchy.network"),
+        self.assertEqual(vpn.replaces, ())
+        self.assertEqual((alternative_vpn.section, alternative_vpn.after), (None, None))
+        self.assertFalse(alternative_vpn.enabled)
+        self.assertEqual(alternative_vpn.replaces, ())
+
+    def test_apply_all_disables_installed_disabled_plugins(self) -> None:
+        directory = self.paths.installed_root / "jkoestinger.vpn"
+        directory.mkdir(parents=True)
+        directory.joinpath("manifest.json").write_text('{"id":"jkoestinger.vpn"}\n')
+
+        run_plugins(
+            "apply", "all", paths=self.paths, backend=self.backend,
+            assume_yes=True, dry_run=False, stdin=io.StringIO(),
+            stdout=io.StringIO(), progress=False,
         )
-        self.assertTrue(alternative_vpn.enabled)
-        self.assertEqual(
-            alternative_vpn.replaces,
-            ("io.github.grichard99.omaproton-vpn",),
-        )
+
+        self.assertIn(("disable", "jkoestinger.vpn"), self.backend.calls)
 
     def test_targeted_apply_can_install_disabled_omamail_without_making_it_default(self) -> None:
         run_plugins(
@@ -145,27 +181,6 @@ class PluginTests(unittest.TestCase):
 
         self.assertIn(("install", "omamail"), self.backend.calls)
         self.assertFalse(any(call[0] == "configure_omamail_default" for call in self.backend.calls))
-
-    def test_alternative_vpn_is_enabled_before_current_vpn_is_disabled(self) -> None:
-        current = self.paths.installed_root / "io.github.grichard99.omaproton-vpn"
-        current.mkdir(parents=True)
-        current.joinpath("manifest.json").write_text(
-            json.dumps({"id": "io.github.grichard99.omaproton-vpn"})
-        )
-
-        run_plugins(
-            "apply", "jkoestinger.vpn", paths=self.paths, backend=self.backend,
-            assume_yes=True, dry_run=False, stdin=io.StringIO(),
-            stdout=io.StringIO(), progress=False,
-        )
-
-        enabled = self.backend.calls.index(
-            ("enable", "jkoestinger.vpn", "right", "omarchy.network")
-        )
-        disabled = self.backend.calls.index(
-            ("disable", "io.github.grichard99.omaproton-vpn")
-        )
-        self.assertLess(enabled, disabled)
 
     def test_remove_keeps_catalog_entry_and_calls_supported_remover(self) -> None:
         run_plugins(
@@ -188,15 +203,65 @@ class PluginTests(unittest.TestCase):
             plugin for plugin in load_plugins(self.paths.config) if plugin.id == "omamail"
         )
         backend = OmarchyPluginBackend(self.paths)
-        from unittest.mock import patch
         with patch.object(backend, "_run"):
             backend.remove(plugin, assume_yes=True)
         self.assertEqual(bindings.read_text(), replacement)
+
+    def test_display_binding_targets_hyprmoncfg_and_is_idempotent(self) -> None:
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        bindings.parent.mkdir(parents=True)
+        bindings.write_text("-- personal\n")
+        backend = OmarchyPluginBackend(self.paths)
+        with patch.object(backend, "_run") as run:
+            backend.configure_display_binding()
+            first = bindings.read_text()
+            backend.configure_display_binding()
+        self.assertEqual(bindings.read_text(), first)
+        self.assertIn("-- personal", first)
+        self.assertIn('hl.unbind("SUPER + CTRL + D")', first)
+        self.assertIn("omarchy-shell shell summon crmne.hyprmoncfg", first)
+        self.assertEqual(run.call_count, 2)
+
+    def test_spotlight_binding_moves_dictation_and_is_idempotent(self) -> None:
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        bindings.parent.mkdir(parents=True)
+        bindings.write_text("-- personal\n")
+        plugin_dir = self.paths.installed_root / "io.github.maajix.spotlight"
+        helper = plugin_dir / "bin" / "spotlight-helper"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("#!/bin/sh\n")
+        backend = OmarchyPluginBackend(self.paths)
+        with patch.object(backend, "_run") as run:
+            backend.configure_spotlight_binding(plugin_dir)
+            backend.configure_spotlight_binding(plugin_dir)
+        result = bindings.read_text()
+        self.assertEqual(result.count("-- >>> omarchy-setup dictation-shortcut >>>"), 1)
+        self.assertIn('hl.unbind("SUPER + CTRL + X")', result)
+        self.assertIn('o.bind("SUPER + ALT + D", "Toggle dictation"', result)
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            (str(helper), "write-binding", "ALT + SPACE"),
+        )
 
     def test_apply_is_idempotent_and_disables_only_after_enable(self) -> None:
         old_radar = self.paths.installed_root / "com.omastorm.radar"
         old_radar.mkdir(parents=True)
         old_radar.joinpath("manifest.json").write_text('{"id":"com.omastorm.radar"}\n')
+        old_notifications = self.paths.installed_root / "shavanced.notification-center"
+        old_notifications.mkdir(parents=True)
+        old_notifications.joinpath("manifest.json").write_text(
+            '{"id":"shavanced.notification-center"}\n'
+        )
+        old_monitor = self.paths.installed_root / "harshith.system-monitor"
+        old_monitor.mkdir(parents=True)
+        old_monitor.joinpath("manifest.json").write_text(
+            '{"id":"harshith.system-monitor"}\n'
+        )
+        old_tray = self.paths.installed_root / "io.github.tyrichards.tray"
+        old_tray.mkdir(parents=True)
+        old_tray.joinpath("manifest.json").write_text(
+            '{"id":"io.github.tyrichards.tray"}\n'
+        )
         output = io.StringIO()
 
         for _ in range(2):
@@ -207,7 +272,7 @@ class PluginTests(unittest.TestCase):
             ), 0)
 
         installs = [call for call in self.backend.calls if call[0] == "install"]
-        self.assertEqual(len(installs), 6)
+        self.assertEqual(len(installs), 8)
         first_radar_enable = self.backend.calls.index(
             ("enable", "eduardodallecort.weather-radar", "center", "omarchy.weather")
         )
@@ -215,6 +280,48 @@ class PluginTests(unittest.TestCase):
         self.assertLess(first_radar_enable, first_radar_disable)
         self.assertNotIn(("disable", "omarchy.power"), self.backend.calls)
         self.assertIn(("disable", "omarchy.monitor"), self.backend.calls)
+        tray_enable = self.backend.calls.index(
+            ("enable", "omarchy.tray", "right", "crmne.hyprmoncfg")
+        )
+        self.assertLess(tray_enable, self.backend.calls.index(("disable", "io.github.tyrichards.tray")))
+        monitor_enable = self.backend.calls.index(
+            ("enable", "zoltanf.hw-monitor", "right", "omarchy.tray")
+        )
+        self.assertLess(monitor_enable, self.backend.calls.index(("disable", "harshith.system-monitor")))
+        notification_enable = self.backend.calls.index(
+            ("enable", "jankeesvw.notification-center", "right", "robzolkos.github")
+        )
+        notification_disable = self.backend.calls.index(
+            ("disable", "shavanced.notification-center")
+        )
+        self.assertLess(notification_enable, notification_disable)
+        self.assertIn(("enable", "io.github.maajix.spotlight", None, None), self.backend.calls)
+        self.assertIn(
+            ("configure_spotlight_binding", "io.github.maajix.spotlight"),
+            self.backend.calls,
+        )
+
+    def test_overlay_plugin_can_omit_bar_placement(self) -> None:
+        path = self.paths.state_root / "overlay-plugin.toml"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            '[[plugin]]\nid="example.overlay"\nurl="https://github.com/example/overlay.git"\n'
+        )
+        plugin = load_plugins(path)[0]
+        self.assertEqual((plugin.section, plugin.after), (None, None))
+
+    def test_status_detects_enabled_overlay_plugins(self) -> None:
+        spotlight = self.paths.installed_root / "io.github.maajix.spotlight"
+        spotlight.mkdir(parents=True)
+        spotlight.joinpath("manifest.json").write_text(
+            '{"id":"io.github.maajix.spotlight"}\n'
+        )
+        self.paths.shell_config.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.shell_config.write_text(
+            '{"bar":{"layout":{}},"plugins":[{"id":"io.github.maajix.spotlight"}]}\n'
+        )
+        status = format_plugin_status(self.paths)
+        self.assertRegex(status, r"io\.github\.maajix\.spotlight\s+enabled\s+overlay")
 
     def test_builtin_media_is_positioned_without_install_or_update(self) -> None:
         run_plugins(
@@ -252,6 +359,9 @@ class PluginTests(unittest.TestCase):
         self.assertLess(service, install)
         self.assertLess(install, enable)
         self.assertLess(enable, disable)
+        self.assertGreater(
+            self.backend.calls.index(("configure_display_binding",)), disable
+        )
 
     def test_failed_backend_install_preserves_stock_widget_and_skips_plugin(self) -> None:
         self.backend.satisfy_requirements = False
@@ -289,7 +399,10 @@ class PluginTests(unittest.TestCase):
         )
 
         self.assertEqual(self.backend.calls[0], ("upgrade", target, True))
-        self.assertIn(("enable", target, "right", "omarchy.tray"), self.backend.calls)
+        self.assertIn(
+            ("enable", target, "right", "omarchy.tray"),
+            self.backend.calls,
+        )
         self.assertFalse(any(call[0] == "upgrade" and call[1] != target for call in self.backend.calls))
 
     def test_unknown_upgrade_target_fails_without_changes(self) -> None:

@@ -54,29 +54,61 @@ def install(shell: Path, templates: Path) -> None:
              'import "services"\nimport "services/OlioHostedWidgets.js" as OlioHostedWidgets\n')
     _replace(shell / "shell.qml", "ShellRoot {\n  id: shell\n",
              "ShellRoot {\n  id: shell\n\n  ArtworkInfo { }\n")
+    _replace(shell / "shell.qml",
+             "    id: defaultsFile\n"
+             "    path: shell.defaultsPath\n",
+             "    id: defaultsFile\n"
+             "    path: shell.defaultsPath\n"
+             "    blockLoading: true\n")
+    _replace(shell / "shell.qml",
+             "    id: userConfigFile\n"
+             "    path: shell.userConfigPath\n",
+             "    id: userConfigFile\n"
+             "    path: shell.userConfigPath\n"
+             "    blockLoading: true\n")
+    _replace(shell / "shell.qml",
+             "  Component.onCompleted: {\n"
+             "    console.log(\"omarchy-shell paths\",\n",
+             "  Component.onCompleted: {\n"
+             "    // Resolve configuration before plugin discovery can mutate it.\n"
+             "    shell.loadDefaults(defaultsFile.text())\n"
+             "    console.log(\"omarchy-shell paths\",\n")
     marker = "      _barEntryShellLookup: function(ownerId, moduleName) {\n"
     _replace(shell / "shell.qml", marker,
-             "      _createBarWidget: function(moduleName, parent, barApi) {\n"
+             "      _createBarWidget: function(moduleName, parent, barApi, settings) {\n"
              "        return hasCurrentBarCapabilities()\n"
-             "          ? OlioHostedWidgets.create(shell, key, moduleName, parent, barApi) : null\n"
+             "          ? OlioHostedWidgets.create(shell, key, moduleName, parent, barApi, settings) : null\n"
              "      },\n" + marker)
     api = shell / "services" / "PluginShellApi.qml"
     _replace(api, "  property var _barEntryShellLookup: null\n",
              "  property var _barEntryShellLookup: null\n  property var _createBarWidget: null\n")
     _replace(api, "  function serviceFor(id) {\n",
-             "  function createBarWidget(moduleName, parent, barApi) {\n"
-             "    return _createBarWidget ? _createBarWidget(moduleName, parent, barApi) : null\n"
+             "  function createBarWidget(moduleName, parent, barApi, settings) {\n"
+             "    return _createBarWidget ? _createBarWidget(moduleName, parent, barApi, settings) : null\n"
              "  }\n\n  function serviceFor(id) {\n")
     util = shell / "Commons" / "Util.qml"
     _replace(util, '["bash", "-lc", command]', '["bash", "-c", command]')
     _replace(util, '["bash", "-lc", \'exec "$@"\', "bash"]',
              '["bash", "-c", \'exec "$@"\', "bash"]')
     notification_service = shell / "plugins/notifications/Service.qml"
+    modern_notification_marker = (
+        "  function marginsFor(screenName) {\n"
+        "    return Delivery.deckMargins(barPosition, Delivery.barThickness(barRef, screenName, defaultBarSize), Style.gapsOut)\n"
+        "  }"
+    )
     legacy_notification_marker = (
         "      readonly property var popupPlacement: NotificationLogic.popupPlacement(\n"
         "        service.barPosition, service.barClearance, Style.gapsOut)"
     )
-    if legacy_notification_marker in notification_service.read_text():
+    if modern_notification_marker in notification_service.read_text():
+        _replace(notification_service,
+             modern_notification_marker,
+             "  function marginsFor(screenName) {\n"
+             "    if (barRef && barRef.notificationPlacement !== undefined)\n"
+             "      return barRef.notificationPlacement.margins\n"
+             "    return Delivery.deckMargins(barPosition, Delivery.barThickness(barRef, screenName, defaultBarSize), Style.gapsOut)\n"
+             "  }")
+    elif legacy_notification_marker in notification_service.read_text():
         _replace(notification_service,
              legacy_notification_marker,
              "      readonly property var popupPlacement: service.shell && service.shell.bar\n"

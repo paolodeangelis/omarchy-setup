@@ -10,17 +10,25 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipUnless(shutil.which("node"), "Node is required for QML JavaScript behavior tests")
 class ThemeHostTests(unittest.TestCase):
+    def test_shell_config_loads_before_plugin_discovery_without_replacing_stock_persistence(self):
+        host = (ROOT / "src/omarchy_setup/modules/theme/host_integration.py").read_text()
+        self.assertNotIn('"ShellConfigStore.qml"', host)
+        self.assertNotIn("shellConfigStore", host)
+        self.assertEqual(host.count('"    blockLoading: true\\n"'), 2)
+        self.assertIn("shell.loadDefaults(defaultsFile.text())", host)
+
     def test_plugin_facades_guard_owner_destruction(self):
         bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
         self.assertIn("function(target) { if (root) root.hideTooltip(target) }", bar)
         self.assertIn("if (!target || !root) return", bar)
         self.assertIn("if (!root || !slot) return", bar)
         self.assertIn('if (!root.shell || typeof root.shell.createBarWidget !== "function") return', bar)
-        self.assertEqual(
-            bar.count("Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })"),
-            3,
-        )
+        self.assertEqual(bar.count('typeof hostedLoader.reload === "function"'), 3)
         self.assertNotIn("Qt.callLater(hostedLoader.reload)", bar)
+        self.assertIn("onBarConfigChanged: applyBarConfig()", bar)
+        self.assertIn("Component.onCompleted: applyBarConfig()", bar)
+        self.assertNotIn("shellConfigReady", bar)
+        self.assertIn("api, slot.moduleSettings)", bar)
         hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)
@@ -56,6 +64,23 @@ class ThemeHostTests(unittest.TestCase):
         runner = source[start:end]
         self.assertIn('Quickshell.execDetached(["bash", "-c", command])', runner)
         self.assertNotIn("Util.execDetached(command)", runner)
+
+    def test_tray_double_click_does_not_reach_bar_background_gesture(self):
+        tray = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/widgets/Tray.qml").read_text()
+        self.assertIn("onDoubleClicked: function(mouse) { mouse.accepted = true }", tray)
+
+    def test_supported_trays_are_pinned_to_the_inner_bar_edge(self):
+        model = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/BarModel.js").read_text()
+        self.assertIn('"omarchy.tray", "io.github.tyrichards.tray"', model)
+
+    def test_plugin_bar_api_uses_the_configured_olio_transparency(self):
+        bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn('api.transparent = Qt.binding(function() { return root.transparent })', bar)
+        self.assertNotIn('api.pluginId === "io.github.tyrichards.tray"', bar)
+
+    def test_module_double_clicks_do_not_reach_bar_background_gesture(self):
+        bar = (ROOT / "themes/olio-su-silicio/plugins/olio.bar/Bar.qml").read_text()
+        self.assertIn('onDoubleClicked: function(mouse) { mouse.accepted = true }', bar)
 
     def test_toasts_match_existing_popup_offset_in_both_modes(self):
         script = r"""
@@ -112,7 +137,8 @@ assert.equal(context.create(host, 'other.bar', 'test.widget', {}, bar), null);
 assert.equal(context.create(host, 'olio.bar', 'other.widget', {}, bar), null);
 assert.equal(context.create(host, 'olio.bar', 'test.widget', {}, {pluginId:'forged'}), null);
 assert.equal(calls.length, 0);
-const result = context.create(host, 'olio.bar', 'test.widget', {}, bar);
+const settings = {value: 1};
+const result = context.create(host, 'olio.bar', 'test.widget', {}, bar, settings);
 assert.equal(result.props.sourceComponent, component);
 assert.equal(result.props.widgetShell.serviceFor('test.widget'), ownService);
 assert.equal(result.props.widgetShell.serviceFor('other.widget'), null);
@@ -121,6 +147,14 @@ assert.equal(bar.shell.serviceFor('test.widget'), null); // bar's facade unchang
 host.pluginRegistry.isEnabled = () => false;
 assert.equal(context.create(host, 'olio.bar', 'test.widget', {}, bar), null);
 assert.equal(calls.length, 1);
+
+host.pluginRegistry.isEnabled = id => id === 'first.widget';
+host.pluginRegistry.installedPlugins['first.widget'] = {id:'first.widget', __isFirstParty:true};
+host.barWidgetRegistry.widgets['first.widget'] = {component: {createObject:(parent, props)=>({parent, props})}};
+host.barEntryConfigured = id => id === 'first.widget';
+const first = context.create(host, 'olio.bar', 'first.widget', {}, {pluginId:'first.widget', moduleName:'first.widget'}, settings);
+assert.equal(first.props.settings, settings);
+assert.equal(first.props.moduleName, 'first.widget');
 """
         result = subprocess.run(
             ["node", "-e", script, str(ROOT / "themes/olio-su-silicio/shell/OlioHostedWidgets.js")],

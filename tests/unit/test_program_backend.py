@@ -255,6 +255,42 @@ class ProgramBackendTests(unittest.TestCase):
         self.assertIn("protonvpn signin", program.login_command[1])
         self.assertIn("Proton sign-in failed; review the error above", program.login_command[1])
 
+    def test_proton_vpn_launcher_activates_existing_instance_and_is_removable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            system = root / "system-applications"
+            data = root / "data"
+            binary = root / "bin"
+            system.mkdir()
+            source = system / "proton.vpn.app.gtk.desktop"
+            source.write_text(
+                "[Desktop Entry]\nName=Proton VPN\nExec=protonvpn-app\n"
+                "Type=Application\n"
+            )
+            paths = ProgramPaths(
+                data_home=data,
+                shell_rc=root / ".bashrc",
+                bin_home=binary,
+            )
+            backend = OmarchyProgramBackend(system_applications=system)
+
+            with patch.object(backend, "_run"):
+                backend._configure_proton_vpn_launcher(paths)
+                first = (data / "applications" / source.name).read_text()
+                backend._configure_proton_vpn_launcher(paths)
+
+            wrapper = binary / "omarchy-protonvpn-app"
+            self.assertIn(f"Exec={wrapper}", first)
+            self.assertEqual((data / "applications" / source.name).read_text(), first)
+            self.assertIn("busctl --user status proton.vpn.app.gtk", wrapper.read_text())
+            self.assertIn("gapplication launch proton.vpn.app.gtk", wrapper.read_text())
+
+            with patch.object(backend, "_run"):
+                backend._remove_proton_vpn_launcher(paths)
+
+            self.assertFalse(wrapper.exists())
+            self.assertFalse((data / "applications" / source.name).exists())
+
     def test_proton_vpn_login_keeps_cli_failure_visible(self) -> None:
         program = next(program for program in PROGRAMS if program.name == "proton-vpn")
         with tempfile.TemporaryDirectory() as directory:
@@ -325,6 +361,16 @@ class ProgramBackendTests(unittest.TestCase):
         program = next(program for program in PROGRAMS if program.name == "telegram")
 
         self.assertEqual(program.login_command, ("uwsm-app", "--", "Telegram"))
+
+    def test_clickup_uses_aur_package_and_opens_onboarding(self) -> None:
+        program = next(program for program in PROGRAMS if program.name == "clickup")
+
+        self.assertEqual(program.packages, ("clickup",))
+        self.assertEqual(
+            program.install_command,
+            ("omarchy", "pkg", "aur", "add", "clickup"),
+        )
+        self.assertEqual(program.login_command, ("uwsm-app", "--", "clickup"))
 
     def test_thunderbird_binding_replaces_managed_omamail_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

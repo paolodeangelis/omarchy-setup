@@ -203,6 +203,7 @@ PROGRAMS = (
             "read -rsn 1; exit \"$status\"; }",
         ),
         aliases=("protonvpn",),
+        kind="proton-vpn",
     ),
     Program(
         name="libreoffice",
@@ -339,6 +340,16 @@ PROGRAMS = (
         desktop_file="Zoom Web.desktop",
         uninstall_command=("omarchy", "webapp", "remove", "Zoom Web"),
         include_in_all=False,
+    ),
+    Program(
+        name="clickup",
+        label="ClickUp",
+        description="Install ClickUp's official Linux desktop application.",
+        packages=("clickup",),
+        install_command=("omarchy", "pkg", "aur", "add", "clickup"),
+        source="AUR",
+        upgrade_policy="system",
+        login_command=("uwsm-app", "--", "clickup"),
     ),
     Program(
         name="whatsapp",
@@ -509,6 +520,8 @@ class OmarchyProgramBackend:
             _install_zen_profile_config(paths)
         elif program.kind == "thunderbird":
             _install_thunderbird_binding(paths)
+        elif program.kind == "proton-vpn":
+            self._configure_proton_vpn_launcher(paths)
 
     def uninstall(self, program: Program, paths: ProgramPaths, *, quiet: bool) -> None:
         if program.kind in {"mamba", "winapps"}:
@@ -558,6 +571,45 @@ class OmarchyProgramBackend:
             _remove_thunderbird_binding(paths)
         elif program.kind == "zoom-native":
             self._remove_zoom_native(paths)
+        elif program.kind == "proton-vpn":
+            self._remove_proton_vpn_launcher(paths)
+
+    def _configure_proton_vpn_launcher(self, paths: ProgramPaths) -> None:
+        source = self.system_applications / "proton.vpn.app.gtk.desktop"
+        if not source.is_file():
+            return
+        contents = source.read_text()
+        if "Exec=protonvpn-app" not in contents:
+            raise ProgramError(f"unexpected Proton VPN launcher format: {source}")
+
+        bin_home = paths.bin_home or paths.data_home.parent / "bin"
+        wrapper = bin_home / "omarchy-protonvpn-app"
+        wrapper.parent.mkdir(parents=True, exist_ok=True)
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "# Managed by omarchy-setup: avoid Proton VPN duplicate-instance crash.\n"
+            "if busctl --user status proton.vpn.app.gtk >/dev/null 2>&1; then\n"
+            "  exec gapplication launch proton.vpn.app.gtk\n"
+            "fi\n"
+            "exec /usr/bin/protonvpn-app \"$@\"\n"
+        )
+        wrapper.chmod(0o755)
+
+        applications = paths.data_home / "applications"
+        applications.mkdir(parents=True, exist_ok=True)
+        target = applications / source.name
+        target.write_text(contents.replace("Exec=protonvpn-app", f"Exec={wrapper}", 1))
+        self._run(("update-desktop-database", str(applications)))
+
+    def _remove_proton_vpn_launcher(self, paths: ProgramPaths) -> None:
+        bin_home = paths.bin_home or paths.data_home.parent / "bin"
+        wrapper = bin_home / "omarchy-protonvpn-app"
+        target = paths.data_home / "applications" / "proton.vpn.app.gtk.desktop"
+        if target.is_file() and f"Exec={wrapper}" in target.read_text():
+            target.unlink()
+        if wrapper.is_file() and "Managed by omarchy-setup" in wrapper.read_text():
+            wrapper.unlink()
+        self._run(("update-desktop-database", str(target.parent)))
 
     def _native_zoom_desktop(self) -> Path | None:
         preferred = self.system_applications / "Zoom.desktop"
@@ -1000,7 +1052,7 @@ def run_install(
         return 0
 
     has_configuration = not install_only and any(
-        program.kind in {"zen", "thunderbird"} for program in programs
+        program.kind in {"zen", "thunderbird", "proton-vpn"} for program in programs
     )
     has_actions = bool(missing) or has_configuration or (
         not install_only and (login or set_defaults)

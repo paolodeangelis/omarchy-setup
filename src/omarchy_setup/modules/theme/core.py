@@ -611,10 +611,31 @@ def _configure_bar(paths: ThemePaths, style: str) -> bytes | None:
     bar["id"] = "olio.bar"
     bar["position"] = "top"
     bar["style"] = style
+    bar["transparent"] = False
+    bar["centerAnchor"] = "omarchy.clock"
     content = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
     if previous is not None and previous.decode() == content:
         return previous
     _write_atomic(paths.shell_config, content)
+    return previous
+
+
+def _configure_stock_bar(paths: ThemePaths) -> bytes | None:
+    previous = paths.shell_config.read_bytes() if paths.shell_config.is_file() else None
+    try:
+        config = json.loads(previous.decode() if previous is not None else "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ThemeError(f"invalid Omarchy shell configuration: {paths.shell_config}") from error
+    if not isinstance(config, dict):
+        raise ThemeError(f"Omarchy shell configuration must be an object: {paths.shell_config}")
+    bar = config.setdefault("bar", {})
+    if not isinstance(bar, dict):
+        raise ThemeError("Omarchy shell 'bar' configuration must be an object")
+    bar["id"] = "omarchy.bar"
+    bar.pop("style", None)
+    content = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+    if previous is None or previous.decode() != content:
+        _write_atomic(paths.shell_config, content)
     return previous
 
 
@@ -649,6 +670,11 @@ def _write_atomic(path: Path, content: str) -> None:
 def _adapt_45_keyboard_panel(source: str) -> str:
     replacements = {
         "import QtQuick\n": "import QtQuick\nimport Caelestia.Blobs\n",
+        "  property int gap: Style.gapsOut  // distance between bar edge and panel\n": (
+            "  property int gap: bar && bar.barMargins && bar.barMargins.floating === true\n"
+            "    ? Math.max(0, Number(bar.barMargins.popupGap) || 0)\n"
+            "    : Math.max(6, Style.gapsOut)  // distance between bar edge and panel\n"
+        ),
         "  property bool focusPrimed: false\n": (
             "  property bool focusPrimed: false\n"
             "  readonly property var barMargins: bar && bar.barMargins !== undefined\n"
@@ -657,35 +683,67 @@ def _adapt_45_keyboard_panel(source: str) -> str:
             "    && barMargins.top === 0 && barMargins.right === 0\n"
             "    && barMargins.bottom === 0 && barMargins.left === 0\n"
         ),
+        "  readonly property real barThickness: !bar ? 0\n"
+        "    : (typeof bar.barSizeFor === \"function\" && screen ? bar.barSizeFor(screen.name) : bar.barSize)\n": (
+            "  readonly property real barThickness: !bar ? 0\n"
+            "    : (typeof bar.barSizeFor === \"function\" && screen ? bar.barSizeFor(screen.name) : bar.barSize)\n"
+            "  readonly property real barEdgeMargin: Number(barMargins[barPos]) || 0\n"
+        ),
+        "  readonly property real _barStripSize: bar ? barThickness + gap : 0\n": (
+            "  readonly property real _barStripSize: bar ? barEdgeMargin + barThickness + gap : 0\n"
+        ),
+        "? Math.max(120, screenW - ((barPos === \"left\" || barPos === \"right\") ? barThickness + gap + margin : margin * 2))": (
+            "? Math.max(120, screenW - ((barPos === \"left\" || barPos === \"right\") ? barEdgeMargin + barThickness + gap + margin : margin * 2))"
+        ),
+        "? Math.max(120, screenH - ((barPos === \"top\" || barPos === \"bottom\") ? barThickness + gap + margin : margin * 2))": (
+            "? Math.max(120, screenH - ((barPos === \"top\" || barPos === \"bottom\") ? barEdgeMargin + barThickness + gap + margin : margin * 2))"
+        ),
+        "screenH - barThickness - drawnHeight - gap": "screenH - barEdgeMargin - barThickness - drawnHeight - gap",
+        "barPos === \"left\" ? barThickness + gap : screenW - barThickness - contentWidth - gap": (
+            "barPos === \"left\" ? barEdgeMargin + barThickness + gap : screenW - barEdgeMargin - barThickness - contentWidth - gap"
+        ),
+        "      x = barThickness + gap\n": "      x = barEdgeMargin + barThickness + gap\n",
+        "      x = screenW - barThickness - contentWidth - gap\n": (
+            "      x = screenW - barEdgeMargin - barThickness - contentWidth - gap\n"
+        ),
+        "      y = barThickness + gap\n": "      y = barEdgeMargin + barThickness + gap\n",
         "    color: Commons.Color.popups.background\n": (
             "    color: root.liquidEnabled ? \"transparent\" : Commons.Color.popups.background\n"
         ),
         "  BorderSurface {\n    id: card\n": (
-            "  BlobGroup {\n"
-            "    id: liquidGroup\n"
-            "    color: Commons.Color.popups.background\n"
-            "    smoothing: Math.max(28, Style.cornerRadius * 2)\n"
-            "    cornerFill: true\n"
-            "  }\n\n"
-            "  BlobRect {\n"
-            "    x: 0; y: 0; width: root.screenW; height: root.barThickness\n"
-            "    group: root.liquidEnabled ? liquidGroup : null\n"
-            "    radius: 0\n"
-            "    visible: root.liquidEnabled && card.opacity > 0\n"
-            "  }\n\n"
-            "  BlobRect {\n"
-            "    x: card.x; y: card.y; width: card.width; height: card.height\n"
-            "    group: root.liquidEnabled ? liquidGroup : null\n"
-            "    radius: Style.cornerRadius\n"
-            "    visible: root.liquidEnabled && card.opacity > 0\n"
+            "  Item {\n"
+            "    id: liquidViewport\n"
+            "    x: 0; y: root.barEdgeMargin + root.barThickness\n"
+            "    width: root.screenW; height: Math.max(0, root.screenH - y)\n"
+            "    clip: true\n\n"
+            "    BlobGroup {\n"
+            "      id: liquidGroup\n"
+            "      color: Commons.Color.popups.background\n"
+            "      smoothing: Math.max(28, Style.cornerRadius * 2)\n"
+            "      cornerFill: true\n"
+            "    }\n\n"
+            "    BlobRect {\n"
+            "      x: 0; y: -root.barThickness; width: root.screenW; height: root.barThickness\n"
+            "      group: root.liquidEnabled ? liquidGroup : null\n"
+            "      radius: 0\n"
+            "      visible: root.liquidEnabled && card.opacity > 0\n"
+            "    }\n\n"
+            "    BlobRect {\n"
+            "      x: card.x; y: card.y - liquidViewport.y; width: card.width; height: card.height\n"
+            "      group: root.liquidEnabled ? liquidGroup : null\n"
+            "      radius: Style.cornerRadius\n"
+            "      visible: root.liquidEnabled && card.opacity > 0\n"
+            "    }\n"
             "  }\n\n"
             "  BorderSurface {\n    id: card\n"
         ),
     }
+    expected_counts = {"screenH - barThickness - drawnHeight - gap": 2}
     for marker, replacement in replacements.items():
-        if source.count(marker) != 1:
+        expected = expected_counts.get(marker, 1)
+        if source.count(marker) != expected:
             raise ThemeError("installed Omarchy 4.5 KeyboardPanel has no validated liquid marker")
-        source = source.replace(marker, replacement, 1)
+        source = source.replace(marker, replacement, expected)
     return source
 
 
@@ -699,6 +757,18 @@ def _install_liquid_ui(paths: ThemePaths, source: Path, ui_directory: Path) -> N
     target_panel = ui_directory / "KeyboardPanel.qml"
     if digest == OMARCHY_45_KEYBOARD_PANEL_SHA256:
         target_panel.write_text(_adapt_45_keyboard_panel(source.read_text()))
+        popup_card = ui_directory / "PopupCard.qml"
+        popup_text = popup_card.read_text()
+        marker = '    : (typeof bar.barSizeFor === "function" && popupScreen ? bar.barSizeFor(popupScreen.name) : bar.barSize)\n'
+        if popup_text.count(marker) != 1:
+            raise ThemeError("installed Omarchy 4.5 PopupCard has no validated bar-size marker")
+        popup_card.write_text(
+            popup_text.replace(
+                marker,
+                '    : Number(typeof bar.barSizeFor === "function" && popupScreen ? bar.barSizeFor(popupScreen.name) : bar.barSize) || 0\n',
+                1,
+            )
+        )
     else:
         if not paths.keyboard_panel_template.is_file():
             raise ThemeError("liquid KeyboardPanel template is missing")
@@ -1035,7 +1105,7 @@ def configure_theme(
         # Floating mode disables the liquid renderer in Olio.bar, but retaining
         # the shared host preserves Omarchy popup anchoring for third-party
         # widgets. A failed overlay still rolls back through the existing
-        # exception path; `theme restore` remains the explicit stock reset.
+        # exception path; `theme bar-stock` remains the explicit stock reset.
         overlay_result = apply_theme(paths, backend)
         if theme_changed and overlay_result == "already applied":
             backend.restart_shell(paths.overlay_root)
@@ -1096,12 +1166,16 @@ def run_theme(
     if dry_run:
         if normalized in {"bar-fixed", "bar-floating"}:
             print(f"Would install {THEME_NAME} and configure the {normalized.removeprefix('bar-')} bar.", file=stdout)
+        elif normalized == "bar-stock":
+            print(f"Would keep {THEME_NAME} and configure the stock Omarchy bar and shell.", file=stdout)
         else:
             print(f"Would {normalized} the {THEME_NAME} liquid shell overlay.", file=stdout)
         return 0
     if not assume_yes:
         if normalized in {"bar-fixed", "bar-floating"}:
             prompt = f"Install {THEME_NAME} and configure the {normalized.removeprefix('bar-')} bar?"
+        elif normalized == "bar-stock":
+            prompt = f"Keep {THEME_NAME} and configure the stock Omarchy bar and shell?"
         else:
             prompt = f"{normalized.capitalize()} the {THEME_NAME} liquid shell overlay?"
         print(f"{prompt} [y/N] ", end="", file=stdout)
@@ -1119,8 +1193,13 @@ def run_theme(
         )
     else:
         display = ProgressDisplay(stdout, enabled=progress, quiet=False, total=2)
-        display.stage(1, "Restoring stock Omarchy shell")
-        result = restore_theme(paths, backend)
-        display.stage(2, "Stock shell restore verified")
+        display.stage(1, "Restoring stock Omarchy bar and shell")
+        previous_shell_config = _configure_stock_bar(paths)
+        try:
+            result = restore_theme(paths, backend)
+        except Exception:
+            _restore_file(paths.shell_config, previous_shell_config)
+            raise
+        display.stage(2, "Stock bar and shell restore verified")
     print(f"Theme {result}.", file=stdout)
     return 0

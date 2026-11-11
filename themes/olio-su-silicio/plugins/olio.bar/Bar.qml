@@ -1966,7 +1966,7 @@ Item {
     readonly property bool qmlCustom: customType === "qml"
     readonly property bool commandCustom: customType === "command"
     readonly property bool registered: registryComponent !== null
-    readonly property bool useHostedWidget: registered && !firstParty
+    readonly property bool useHostedWidget: registered
       && !!root.shell && typeof root.shell.createBarWidget === "function"
     readonly property var activeItem: {
       if (useHostedWidget) return hostedLoader.host ? hostedLoader.host.item : null
@@ -1995,10 +1995,16 @@ Item {
 
     Component.onCompleted: {
       root.registerModuleSlot(slot)
-      Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
+      Qt.callLater(function() {
+        if (hostedLoader && typeof hostedLoader.reload === "function") hostedLoader.reload()
+      })
     }
-    onRegistryComponentChanged: Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
-    onUseHostedWidgetChanged: Qt.callLater(function() { if (hostedLoader) hostedLoader.reload() })
+    onRegistryComponentChanged: Qt.callLater(function() {
+      if (hostedLoader && typeof hostedLoader.reload === "function") hostedLoader.reload()
+    })
+    onUseHostedWidgetChanged: Qt.callLater(function() {
+      if (hostedLoader && typeof hostedLoader.reload === "function") hostedLoader.reload()
+    })
     Component.onDestruction: {
       if (root.barDragSource === slot) root.clearBarDrag()
       root.unregisterModuleSlot(slot)
@@ -2043,6 +2049,7 @@ Item {
     Item {
       id: hostedLoader
       anchors.fill: parent
+      z: 0
       opacity: slot.dragSource ? 0.22 : 1.0
       property var host: null
       property var loadedComponent: null
@@ -2054,8 +2061,10 @@ Item {
         loadedComponent = null
         if (!slot.useHostedWidget) return
         if (!root.shell || typeof root.shell.createBarWidget !== "function") return
+        var api = slot.firstParty ? root
+          : root.pluginBarApiFor(slot.pluginApiId, slot.moduleName, true)
         host = root.shell.createBarWidget(slot.moduleName, hostedLoader,
-          root.pluginBarApiFor(slot.pluginApiId, slot.moduleName, true))
+          api, slot.moduleSettings)
         if (host) {
           host.widgetSettings = Qt.binding(function() { return slot.moduleSettings })
           loadedComponent = slot.registryComponent
@@ -2195,6 +2204,8 @@ Item {
 
         if (!root.pressModuleClickTarget(slot, mouse.button, mouse.x, mouse.y)) mouse.accepted = false
       }
+
+      onDoubleClicked: function(mouse) { mouse.accepted = true }
     }
 
     onActiveItemChanged: Qt.callLater(injectProps)

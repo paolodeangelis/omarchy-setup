@@ -1,6 +1,6 @@
 # omarchy-setup
 
-[![Omarchy 4.0.6](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
+[![Omarchy 4.5.0](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml/badge.svg?branch=main)](https://github.com/paolodeangelis/omarchy-setup/actions/workflows/omarchy-tests.yml)
 
 Personal, reproducible setup and configuration framework for Omarchy.
 
@@ -151,6 +151,7 @@ omarchy-setup install zotero -l
 omarchy-setup install outlook --login
 omarchy-setup install zoom --login
 omarchy-setup install zoom-web --login  # optional browser-based fallback
+omarchy-setup install clickup --login
 ```
 
 Installing Zen also replaces Omarchy's `Super+Shift+B` binding with a managed
@@ -198,8 +199,8 @@ instead of claiming that an unverified package is current.
 
 ## Dotfiles
 
-Install pinned tmux Resurrect/Continuum support and apply the managed
-`Super+Q` close-window override:
+Install pinned tmux Resurrect/Continuum support, apply the managed
+`Super+Q` close-window override, and deploy document-font compatibility aliases:
 
 ```bash
 omarchy-setup dotfiles -y
@@ -209,6 +210,10 @@ Continuum saves every 15 minutes and restores the latest tmux layout when the
 first tmux server starts after reboot. `Ctrl+Space`, then `Ctrl+S` saves now;
 `Ctrl+Space`, then `Ctrl+R` restores manually. Running processes are not
 preserved across reboot.
+
+The managed Fontconfig rules currently map the Mac PowerPoint full-face name
+`CMU Serif Roman` to the installed `CMU Serif` Roman face. The rule is stored
+under `dotfiles/fontconfig/` and deployed only to the user's Fontconfig directory.
 
 Initial targets are Miniforge-backed `mamba`, `zen`, `1password`, `dropbox`,
 `spotify`, LibreOffice with English/Italian spell checking, BlueBubbles, Zotero, native Zoom, the
@@ -496,10 +501,12 @@ The same hooks run in GitHub-hosted CI. Hook installation is opt-in per clone.
 
 ### System checks
 
-Every pushed commit runs one compatibility workflow containing fast project
-checks, a fresh Omarchy 4.0.6 VM, and the WinApps basic compatibility test. If
-the newest official stable release is newer than 4.0.6, the same run adds a
-configured 4.0.6-to-candidate upgrade VM and, once its ISO is published, a fresh candidate VM. A separate
+Every pushed commit runs one Omarchy 4.5.0 compatibility workflow containing
+fast project checks, the reviewed fresh Omarchy 4.0.6 seed VM, the configured
+4.0.6-to-4.5.0 workstation upgrade, and the WinApps basic compatibility test.
+Omarchy has not published a 4.5.0 ISO, so CI does not claim a fresh 4.5.0
+installation. Once a newer stable release is available, the same run targets
+that candidate and, once its ISO is published, adds a fresh candidate VM. A separate
 monthly release check dispatches this complete workflow once for each newly
 detected stable version; later manual runs or commits can retest a failure.
 The VM jobs use the pinned official ISO harness, verified ISO checksums, and an

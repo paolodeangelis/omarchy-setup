@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from omarchy_setup.modules.dotfiles import (
+    DotfilesError,
     DotfilesPaths,
     OmarchyDotfilesBackend,
     run_dotfiles,
@@ -51,11 +52,15 @@ class DotfilesTests(unittest.TestCase):
             paths.tmux_config.parent.mkdir(parents=True)
             paths.hypr_bindings.parent.mkdir(parents=True)
             paths.aliases_source.parent.mkdir(parents=True)
+            paths.office_font_alias_source.parent.mkdir(parents=True)
             paths.tmux_config.write_text("set -g mouse on\n")
             paths.hypr_bindings.write_text("-- personal\n")
             paths.bashrc.write_text("# personal\n")
             paths.aliases.write_text("alias personal='echo kept'\n")
             paths.aliases_source.write_text("alias vim='nvim'\n")
+            paths.office_font_alias_source.write_text(
+                '<!-- Managed by omarchy-setup -->\n<fontconfig/>\n'
+            )
             backend = OmarchyDotfilesBackend()
 
             backend.apply(paths)
@@ -78,6 +83,31 @@ class DotfilesTests(unittest.TestCase):
             self.assertIn("alias personal='echo kept'", paths.aliases.read_text())
             self.assertIn("alias vim='nvim'", paths.aliases.read_text())
             self.assertEqual(paths.aliases.read_text().count(ALIAS_START), 1)
+            self.assertEqual(
+                paths.office_font_alias.read_text(),
+                paths.office_font_alias_source.read_text(),
+            )
+
+    def test_apply_refuses_to_replace_unmanaged_font_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = DotfilesPaths(root, root / "state", root / "config")
+            paths.tmux_config.parent.mkdir(parents=True)
+            paths.hypr_bindings.parent.mkdir(parents=True)
+            paths.aliases_source.parent.mkdir(parents=True)
+            paths.office_font_alias_source.parent.mkdir(parents=True)
+            paths.tmux_config.write_text("")
+            paths.hypr_bindings.write_text("")
+            paths.bashrc.write_text("")
+            paths.aliases_source.write_text("")
+            paths.office_font_alias_source.write_text(
+                '<!-- Managed by omarchy-setup -->\n<fontconfig/>\n'
+            )
+            paths.office_font_alias.parent.mkdir(parents=True)
+            paths.office_font_alias.write_text("<fontconfig/>\n")
+
+            with self.assertRaisesRegex(DotfilesError, "unmanaged font configuration"):
+                OmarchyDotfilesBackend().apply(paths)
 
     def test_dry_run_only_checks(self) -> None:
         backend = FakeBackend()

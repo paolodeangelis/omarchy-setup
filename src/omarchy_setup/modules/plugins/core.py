@@ -17,6 +17,11 @@ from omarchy_setup.app_config import AppConfigError, load_app_config
 
 
 SPACES_ID = "tornikegomareli.spaces"
+HYPRMONCFG_ID = "crmne.hyprmoncfg"
+DISPLAY_START = "-- >>> omarchy-setup display >>>"
+DISPLAY_END = "-- <<< omarchy-setup display <<<"
+DICTATION_START = "-- >>> omarchy-setup dictation-shortcut >>>"
+DICTATION_END = "-- <<< omarchy-setup dictation-shortcut <<<"
 
 
 class PluginError(RuntimeError):
@@ -27,8 +32,8 @@ class PluginError(RuntimeError):
 class Plugin:
     id: str
     url: str | None
-    section: str
-    after: str
+    section: str | None
+    after: str | None
     builtin: bool = False
     enabled: bool = True
     replaces: tuple[str, ...] = ()
@@ -103,8 +108,13 @@ def load_plugins(path: Path) -> tuple[Plugin, ...]:
         section, after = row.get("section"), row.get("after")
         builtin = row.get("builtin", False)
         enabled = row.get("enabled", True)
-        if not all(isinstance(value, str) and value for value in (plugin_id, section, after)):
-            raise PluginError("plugin entries require non-empty id, section and after strings")
+        if not isinstance(plugin_id, str) or not plugin_id:
+            raise PluginError("plugin entries require a non-empty id string")
+        if (section is None) != (after is None) or any(
+            not isinstance(value, str) or not value for value in (section, after)
+            if value is not None
+        ):
+            raise PluginError("plugin bar placement requires both non-empty section and after strings")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", plugin_id) or ".." in plugin_id:
             raise PluginError(f"invalid plugin id: {plugin_id!r}")
         if not isinstance(builtin, bool):
@@ -122,7 +132,9 @@ def load_plugins(path: Path) -> tuple[Plugin, ...]:
             and url.endswith(".git")
         ):
             raise PluginError(f"plugin URL must be an HTTPS GitHub .git URL: {url!r}")
-        if section not in {"left", "center", "right"}:
+        if section is not None and section not in {
+            "left", "centerBegin", "center", "centerEnd", "right", "tray"
+        }:
             raise PluginError(f"invalid bar section for {plugin_id}: {section!r}")
         if plugin_id in seen:
             raise PluginError(f"duplicate plugin id: {plugin_id}")
@@ -181,6 +193,8 @@ class PluginBackend(Protocol):
     def enable_user_services(self, plugin: Plugin) -> None: ...
     def user_service_active(self, service: str) -> bool: ...
     def configure_omamail_default(self, plugin_dir: Path, open_key: str, compose_key: str) -> None: ...
+    def configure_display_binding(self) -> None: ...
+    def configure_spotlight_binding(self, plugin_dir: Path) -> None: ...
 
 
 class OmarchyPluginBackend:
@@ -240,10 +254,10 @@ class OmarchyPluginBackend:
         self._run(("omarchy", "plugin", "validate", str(directory)))
 
     def enable(self, plugin: Plugin) -> None:
-        self._run((
-            "omarchy", "plugin", "enable", plugin.id,
-            "--section", plugin.section, "--after", plugin.after,
-        ))
+        command = ["omarchy", "plugin", "enable", plugin.id]
+        if plugin.section is not None and plugin.after is not None:
+            command.extend(("--section", plugin.section, "--after", plugin.after))
+        self._run(tuple(command))
 
     def disable(self, plugin_id: str) -> None:
         self._run(("omarchy", "plugin", "disable", plugin_id))
@@ -321,6 +335,49 @@ class OmarchyPluginBackend:
             f'o.bind("{compose_key}", "New email", '
             '"omarchy-shell shell summon omamail \'{\\"compose\\":true}\'")\n'
             f'{end}\n'
+        )
+        _write_atomic(bindings, (contents + "\n\n" if contents else "") + block)
+        self._run(("hyprctl", "reload"))
+
+    def configure_display_binding(self) -> None:
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        if not bindings.is_file():
+            raise PluginError(f"Hyprland bindings are missing: {bindings}")
+        pattern = re.compile(
+            re.escape(DISPLAY_START) + r".*?" + re.escape(DISPLAY_END) + r"\n?", re.S
+        )
+        contents = pattern.sub("", bindings.read_text()).rstrip()
+        block = (
+            f'{DISPLAY_START}\n'
+            'hl.unbind("SUPER + CTRL + D")\n'
+            'o.bind("SUPER + CTRL + D", "Display", '
+            '"omarchy-shell shell summon crmne.hyprmoncfg \'{}\'")\n'
+            f'{DISPLAY_END}\n'
+        )
+        _write_atomic(bindings, (contents + "\n\n" if contents else "") + block)
+        self._run(("hyprctl", "reload"))
+
+    def configure_spotlight_binding(self, plugin_dir: Path) -> None:
+        helper = plugin_dir / "bin" / "spotlight-helper"
+        if not helper.is_file():
+            raise PluginError(f"Spotlight shortcut helper is missing: {helper}")
+        self._run((str(helper), "write-binding", "ALT + SPACE"))
+
+        bindings = self.paths.home / ".config" / "hypr" / "bindings.lua"
+        if not bindings.is_file():
+            raise PluginError(f"Hyprland bindings are missing: {bindings}")
+        pattern = re.compile(
+            re.escape(DICTATION_START) + r".*?" + re.escape(DICTATION_END) + r"\n?", re.S
+        )
+        contents = pattern.sub("", bindings.read_text()).rstrip()
+        block = (
+            f"{DICTATION_START}\n"
+            'hl.unbind("SUPER + CTRL + X")\n'
+            'hl.unbind("SUPER + ALT + D")\n'
+            "if o.dictation_installed and o.dictation_installed() then\n"
+            '  o.bind("SUPER + ALT + D", "Toggle dictation", "omarchy-dictation toggle")\n'
+            "end\n"
+            f"{DICTATION_END}\n"
         )
         _write_atomic(bindings, (contents + "\n\n" if contents else "") + block)
         self._run(("hyprctl", "reload"))
@@ -486,10 +543,11 @@ def _layout_positions(path: Path) -> dict[str, str]:
     try:
         document = json.loads(path.read_text())
         layout = document.get("bar", {}).get("layout", {})
+        enabled_plugins = document.get("plugins", [])
     except (OSError, json.JSONDecodeError, AttributeError) as error:
         raise PluginError(f"cannot read shell layout {path}: {error}") from error
     positions: dict[str, str] = {}
-    for section in ("left", "center", "right"):
+    for section in ("left", "centerBegin", "center", "centerEnd", "right", "tray"):
         entries = layout.get(section, []) if isinstance(layout, dict) else []
         if not isinstance(entries, list):
             continue
@@ -497,6 +555,11 @@ def _layout_positions(path: Path) -> dict[str, str]:
             plugin_id = entry.get("id") if isinstance(entry, dict) else entry
             if isinstance(plugin_id, str):
                 positions[plugin_id] = f"{section}:{index}"
+    if isinstance(enabled_plugins, list):
+        for entry in enabled_plugins:
+            plugin_id = entry.get("id") if isinstance(entry, dict) else entry
+            if isinstance(plugin_id, str):
+                positions.setdefault(plugin_id, "overlay")
     return positions
 
 
@@ -547,8 +610,6 @@ def run_plugins(
     if action == "status":
         print(format_plugin_status(paths), file=stdout)
         return 0
-    if action == "apply" and target == "all":
-        selected = tuple(plugin for plugin in selected if plugin.enabled)
     if dry_run:
         if action == "remove":
             verb = "remove"
@@ -563,8 +624,18 @@ def run_plugins(
             print("Cancelled.", file=stdout)
             return 1
 
+    if action == "apply" and target == "all":
+        selected = tuple(plugin for plugin in selected if plugin.enabled) + tuple(
+            plugin for plugin in selected if not plugin.enabled
+        )
+
     display = ProgressDisplay(stdout, enabled=progress, quiet=False, total=len(selected) + 1)
     for index, plugin in enumerate(selected, start=1):
+        if action == "apply" and target == "all" and not plugin.enabled:
+            display.stage(index, f"Disabling {plugin.id}")
+            if plugin.builtin or (paths.installed_root / plugin.id / "manifest.json").is_file():
+                backend.disable(plugin.id)
+            continue
         if action == "remove":
             display.stage(index, f"Removing {plugin.id}")
             backend.remove(plugin, assume_yes=assume_yes)
@@ -577,6 +648,12 @@ def run_plugins(
                     raise PluginError(f"managed plugin {plugin.id} is not installed; run plugin apply first")
                 backend.upgrade(plugin.id, assume_yes=assume_yes)
         _reconcile_one(paths, backend, plugin)
+
+        if plugin.id == HYPRMONCFG_ID:
+            backend.configure_display_binding()
+
+        if plugin.id == "io.github.maajix.spotlight":
+            backend.configure_spotlight_binding(paths.installed_root / plugin.id)
 
         if plugin.id == "omamail":
             try:

@@ -17,6 +17,7 @@ from omarchy_setup.modules.theme.core import (
     apply_theme,
     configure_theme,
     restore_theme,
+    run_theme,
     theme_status,
     _validate_background_metadata,
     _validate_theme_toml,
@@ -93,8 +94,83 @@ class ThemeTests(unittest.TestCase):
             "shell.qml": (
                 'import "services"\n'
                 "ShellRoot {\n  id: shell\n"
+                "  property var defaultsConfig: builtinShellConfig\n"
+                "  property var shellConfig: builtinShellConfig\n"
+                "  // shell.json has text the shell could not use; persisting would replace it with defaults.\n"
+                "  property bool userConfigUnreadable: false\n"
+                "    if (\"barConfig\" in target) target.barConfig = shell.barConfigFor(manifest)\n"
+                "    userConfigUnreadable = !!userText.trim() && !user\n"
+                "  function persistShellConfig(nextConfig) {\n"
+                "    var payload = JSON.parse(JSON.stringify(nextConfig))\n"
+                "    payload.version = 1\n"
+                "    shellConfig = payload\n"
+                "    if (userConfigUnreadable) {\n"
+                "      console.warn(\"shell.json is unreadable, not overwriting it; fix it to save bar changes\")\n"
+                "      return\n"
+                "    }\n"
+                "    userConfigFile.setText(JSON.stringify(payload, null, 2) + \"\\n\")\n"
+                "  }\n"
+                "    pluginRegistry.shellConfigMutator = function(mutate) { shell.mutateShellConfig(mutate) }\n"
+                "  function mutateShellConfig(mutator) {\n"
+                "    var copy = JSON.parse(JSON.stringify(shellConfig || builtinShellConfig))\n"
+                "    mutator(copy)\n"
+                "    persistShellConfig(copy)\n"
+                "  }\n"
+                "      mutator(scoped)\n"
+                "      if (Util.isPlainObject(scoped.bar)) config.bar = JSON.parse(JSON.stringify(scoped.bar))\n"
+                "    })\n"
+                "    return true\n"
+                "  function updateEntryInline(moduleName, settings) {\n"
+                "    var stripped = Util.canonicalWidgetId(moduleName)\n"
+                "    var copy = JSON.parse(JSON.stringify(shellConfig || builtinShellConfig))\n"
+                "    if (!Util.isPlainObject(copy.bar)) copy.bar = { layout: {} }\n"
+                "    if (!Util.isPlainObject(copy.bar.layout)) copy.bar.layout = {}\n"
+                "    if (!Array.isArray(copy.plugins)) copy.plugins = []\n\n"
+                "    var sections = Util.barSections\n"
+                "    var foundInLayout = false\n"
+                "    var dirty = false\n"
+                "    for (var s = 0; s < sections.length; s++) {\n"
+                "      var arr = copy.bar.layout[sections[s]] || []\n"
+                "      for (var i = 0; i < arr.length; i++) {\n"
+                "        if (arr[i] && Util.canonicalWidgetId(arr[i].id) === stripped) {\n"
+                "          var next = { id: stripped }\n"
+                "          for (var k in settings) if (k !== \"id\") next[k] = settings[k]\n"
+                "          if (JSON.stringify(arr[i]) !== JSON.stringify(next)) {\n"
+                "            arr[i] = next\n"
+                "            dirty = true\n"
+                "          }\n"
+                "          foundInLayout = true\n"
+                "        }\n"
+                "      }\n"
+                "    }\n"
+                "    if (!foundInLayout) {\n"
+                "      for (var j = 0; j < copy.plugins.length; j++) {\n"
+                "        if (copy.plugins[j] && copy.plugins[j].id === stripped) {\n"
+                "          var pnext = { id: stripped }\n"
+                "          for (var pk in settings) if (pk !== \"id\") pnext[pk] = settings[pk]\n"
+                "          if (JSON.stringify(copy.plugins[j]) !== JSON.stringify(pnext)) {\n"
+                "            copy.plugins[j] = pnext\n"
+                "            dirty = true\n"
+                "          }\n"
+                "        }\n"
+                "      }\n"
+                "    }\n"
+                "    if (!dirty) return false\n"
+                "    persistShellConfig(copy)\n"
+                "    return true\n"
+                "  }\n"
                 "    delete copy.__sourceDir\n"
                 "      _barEntryShellLookup: function(ownerId, moduleName) {\n"
+                "  FileView {\n"
+                "    id: defaultsFile\n"
+                "    path: shell.defaultsPath\n"
+                "  }\n"
+                "  FileView {\n"
+                "    id: userConfigFile\n"
+                "    path: shell.userConfigPath\n"
+                "  }\n"
+                "  Component.onCompleted: {\n"
+                "    console.log(\"omarchy-shell paths\",\n"
             ),
             "services/PluginShellApi.qml": "  property var _barEntryShellLookup: null\n  function serviceFor(id) {\n",
             "Commons/Util.qml": (
@@ -292,7 +368,22 @@ class ThemeTests(unittest.TestCase):
         source = (
             "import QtQuick\nimport qs.Commons as Commons\n"
             "PanelWindow {\n  id: root\n"
+            "  property int gap: Style.gapsOut  // distance between bar edge and panel\n"
             "  property bool focusPrimed: false\n"
+            "  readonly property real _barStripSize: bar ? barThickness + gap : 0\n"
+            "  readonly property real availableCardWidth: screenW > 0\n"
+            "    ? Math.max(120, screenW - ((barPos === \"left\" || barPos === \"right\") ? barThickness + gap + margin : margin * 2))\n    : 0\n"
+            "  readonly property real availableCardHeight: screenH > 0\n"
+            "    ? Math.max(120, screenH - ((barPos === \"top\" || barPos === \"bottom\") ? barThickness + gap + margin : margin * 2))\n    : 0\n"
+            "  readonly property real barThickness: !bar ? 0\n"
+            "    : (typeof bar.barSizeFor === \"function\" && screen ? bar.barSizeFor(screen.name) : bar.barSize)\n"
+            "  function geometry() {\n"
+            "    var x = barPos === \"left\" ? barThickness + gap : screenW - barThickness - contentWidth - gap\n"
+            "      x = barThickness + gap\n"
+            "      x = screenW - barThickness - contentWidth - gap\n"
+            "    var y = barPos === \"bottom\" ? screenH - barThickness - drawnHeight - gap : barThickness + gap\n"
+            "    y = screenH - barThickness - drawnHeight - gap\n"
+            "      y = barThickness + gap\n  }\n"
             "  property Component content: null\n"
             "  property rect morphFrom: Qt.rect(0, 0, 0, 0)\n"
             "  BorderSurface {\n    id: card\n"
@@ -307,10 +398,17 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("property rect morphFrom:", adapted)
         self.assertIn("BlobGroup {", adapted)
         self.assertIn('color: root.liquidEnabled ? "transparent"', adapted)
+        self.assertIn("barEdgeMargin + barThickness + gap", adapted)
+        self.assertIn("y: root.barEdgeMargin + root.barThickness", adapted)
+        self.assertIn("y: -root.barThickness", adapted)
 
-    def test_45_notification_service_uses_upstream_placement_unchanged(self) -> None:
+    def test_45_notification_service_uses_olio_placement_with_stock_fallback(self) -> None:
         service = self.paths.system_omarchy / "shell/plugins/notifications/Service.qml"
-        service.write_text("QtObject { property int nativeDelivery: 1 }\n")
+        service.write_text(
+            "  function marginsFor(screenName) {\n"
+            "    return Delivery.deckMargins(barPosition, Delivery.barThickness(barRef, screenName, defaultBarSize), Style.gapsOut)\n"
+            "  }\n"
+        )
         supported = dict(host_integration.SUPPORTED)
         supported["plugins/notifications/Service.qml"] = {
             __import__("hashlib").sha256(service.read_bytes()).hexdigest()
@@ -321,7 +419,22 @@ class ThemeTests(unittest.TestCase):
             apply_theme(self.paths, self.backend)
 
         overlay_service = self.paths.overlay_shell / "plugins/notifications/Service.qml"
-        self.assertEqual(overlay_service.read_text(), service.read_text())
+        self.assertIn("barRef.notificationPlacement.margins", overlay_service.read_text())
+        self.assertIn("return Delivery.deckMargins", overlay_service.read_text())
+        self.assertNotIn("notificationPlacement", service.read_text())
+
+    def test_45_popup_card_tolerates_legacy_plugin_bar_without_size(self) -> None:
+        popup = self.paths.system_omarchy / "shell" / "Ui" / "PopupCard.qml"
+        popup.write_text(
+            'readonly property real barThickness: !bar ? 0\n'
+            '    : (typeof bar.barSizeFor === "function" && popupScreen ? bar.barSizeFor(popupScreen.name) : bar.barSize)\n'
+        )
+        with patch("omarchy_setup.modules.theme.core.OMARCHY_45_KEYBOARD_PANEL_SHA256", self.digest), patch(
+            "omarchy_setup.modules.theme.core.SUPPORTED_KEYBOARD_PANEL_SHA256", {self.digest}
+        ), patch("omarchy_setup.modules.theme.core._adapt_45_keyboard_panel", return_value="adapted\n"):
+            apply_theme(self.paths, self.backend)
+
+        self.assertIn("Number(typeof bar.barSizeFor", (self.paths.overlay_shell / "Ui" / "PopupCard.qml").read_text())
 
     def test_unknown_keyboard_panel_is_rejected_before_activation(self) -> None:
         with self.assertRaisesRegex(ThemeError, "not a validated Omarchy version"):
@@ -349,10 +462,13 @@ class ThemeTests(unittest.TestCase):
         overlay = self.paths.overlay_shell
         host = (overlay / "shell.qml").read_text()
         self.assertIn("hasCurrentBarCapabilities()", host)
-        self.assertIn("OlioHostedWidgets.create(shell, key, moduleName, parent, barApi)", host)
+        self.assertIn("OlioHostedWidgets.create(shell, key, moduleName, parent, barApi, settings)", host)
         self.assertIn("ArtworkInfo { }", host)
         self.assertTrue((overlay / "services" / "ArtworkInfo.qml").is_file())
         self.assertTrue((overlay / "services" / "ArtworkInfoIcon.svg").is_file())
+        self.assertFalse((overlay / "services" / "ShellConfigStore.qml").exists())
+        self.assertIn("persistShellConfig", host)
+        self.assertNotIn("shellConfigStore", host)
         self.assertNotIn("delete copy.__sourceDir", host)
         util = (overlay / "Commons" / "Util.qml").read_text()
         self.assertNotIn('"-lc"', util)
@@ -361,6 +477,9 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("notificationPlacement !== undefined", service)
         self.assertIn(": NotificationLogic.popupPlacement(", service)
         self.assertNotIn("notificationPlacement", (self.paths.system_omarchy / "shell/plugins/notifications/Service.qml").read_text())
+        self.assertEqual(host.count("blockLoading: true"), 2)
+        self.assertIn("shell.loadDefaults(defaultsFile.text())", host)
+        self.assertNotIn("userConfigLoaded", host)
 
     def test_empty_uwsm_placeholder_is_reclaimed_but_foreign_content_is_not(self) -> None:
         self.paths.uwsm_override.parent.mkdir(parents=True)
@@ -379,7 +498,7 @@ class ThemeTests(unittest.TestCase):
     def test_bar_styles_install_managed_sources_and_switch_shells(self) -> None:
         shell_config = self.paths.shell_config
         shell_config.parent.mkdir(parents=True)
-        shell_config.write_text('{"idle": {"lock": 300}, "bar": {"transparent": false}}\n')
+        shell_config.write_text('{"idle": {"lock": 300}, "bar": {"transparent": true}}\n')
 
         with patch(
             "omarchy_setup.modules.theme.core.SUPPORTED_KEYBOARD_PANEL_SHA256",
@@ -408,6 +527,8 @@ class ThemeTests(unittest.TestCase):
         self.assertEqual(config["bar"]["id"], "olio.bar")
         self.assertEqual(config["bar"]["position"], "top")
         self.assertEqual(config["bar"]["style"], "floating")
+        self.assertEqual(config["bar"]["centerAnchor"], "omarchy.clock")
+        self.assertFalse(config["bar"]["transparent"])
         self.assertEqual(self.backend.active, self.paths.overlay_root)
         self.assertEqual(self.backend.update_hooks, [self.paths.post_update_hook])
 
@@ -455,9 +576,29 @@ class ThemeTests(unittest.TestCase):
     def test_theme_defaults_to_fixed_and_accepts_floating(self) -> None:
         fixed = build_parser().parse_args(["theme", "-y"])
         floating = build_parser().parse_args(["theme", "bar-floating", "-y"])
+        stock = build_parser().parse_args(["theme", "bar-stock", "-y"])
 
         self.assertEqual(fixed.action, "bar-fixed")
         self.assertEqual(floating.action, "bar-floating")
+        self.assertEqual(stock.action, "bar-stock")
+
+    def test_restore_selects_the_stock_bar_and_removes_olio_style(self) -> None:
+        self.paths.shell_config.parent.mkdir(parents=True)
+        self.paths.shell_config.write_text('{"bar": {"id": "olio.bar", "style": "floating"}}\n')
+        self.paths.current_theme_name.parent.mkdir(parents=True)
+        self.paths.current_theme_name.write_text("olio-su-silicio\n")
+
+        result = run_theme(
+            "bar-stock", paths=self.paths, backend=self.backend, assume_yes=True,
+            dry_run=False, stdin=__import__("io").StringIO(),
+            stdout=__import__("io").StringIO(), progress=False,
+        )
+
+        self.assertEqual(result, 0)
+        config = __import__("json").loads(self.paths.shell_config.read_text())
+        self.assertEqual(config["bar"]["id"], "omarchy.bar")
+        self.assertNotIn("style", config["bar"])
+        self.assertEqual(self.paths.current_theme_name.read_text(), "olio-su-silicio\n")
 
     def test_failed_activation_restores_existing_user_files(self) -> None:
         self.paths.user_theme.mkdir(parents=True)

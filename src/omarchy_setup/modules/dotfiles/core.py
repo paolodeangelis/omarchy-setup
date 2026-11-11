@@ -75,6 +75,14 @@ class DotfilesPaths:
     def aliases_source(self) -> Path:
         return self.repo_root / "dotfiles" / "bash" / "alias"
 
+    @property
+    def office_font_alias(self) -> Path:
+        return self.config_home / "fontconfig" / "conf.d" / "99-omarchy-setup-office-fonts.conf"
+
+    @property
+    def office_font_alias_source(self) -> Path:
+        return self.repo_root / "dotfiles" / "fontconfig" / "99-omarchy-setup-office-fonts.conf"
+
 
 class Backend(Protocol):
     def check(self, paths: DotfilesPaths) -> None: ...
@@ -99,7 +107,13 @@ class OmarchyDotfilesBackend:
         for command in ("git", "tmux", "hyprctl"):
             if shutil.which(command) is None:
                 raise DotfilesError(f"required command not found: {command}")
-        for target in (paths.tmux_config, paths.hypr_bindings, paths.bashrc, paths.aliases_source):
+        for target in (
+            paths.tmux_config,
+            paths.hypr_bindings,
+            paths.bashrc,
+            paths.aliases_source,
+            paths.office_font_alias_source,
+        ):
             if not target.is_file():
                 raise DotfilesError(f"expected Omarchy configuration is missing: {target}")
 
@@ -164,6 +178,12 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
         paths.aliases.write_text(
             _replace_block(existing_aliases, ALIAS_START, ALIAS_END, alias_block)
         )
+        if paths.office_font_alias.exists() and "Managed by omarchy-setup" not in paths.office_font_alias.read_text():
+            raise DotfilesError(
+                f"refusing to overwrite unmanaged font configuration: {paths.office_font_alias}"
+            )
+        paths.office_font_alias.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(paths.office_font_alias_source, paths.office_font_alias)
 
     def verify(self, paths: DotfilesPaths) -> None:
         tmux = paths.tmux_config.read_text()
@@ -181,6 +201,11 @@ o.bind("SUPER + Q", "Close window", hl.dsp.window.close())
         for line in paths.aliases_source.read_text().splitlines():
             if line and line not in aliases:
                 raise DotfilesError("managed shell alias is missing")
+        if (
+            not paths.office_font_alias.is_file()
+            or paths.office_font_alias.read_text() != paths.office_font_alias_source.read_text()
+        ):
+            raise DotfilesError("office font compatibility alias could not be verified")
         for name, _, revision in PLUGINS:
             result = subprocess.run(
                 ("git", "-C", str(paths.plugin_root / name), "rev-parse", "HEAD"),

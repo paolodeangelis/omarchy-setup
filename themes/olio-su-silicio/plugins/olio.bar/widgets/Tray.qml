@@ -840,6 +840,8 @@ BarWidget {
           trayItemRoot.modelData.activate()
         }
       }
+      // Do not let a tray double-click become the bar background gesture.
+      onDoubleClicked: function(mouse) { mouse.accepted = true }
       onWheel: function(wheel) {
         trayItemRoot.modelData.scroll(wheel.angleDelta.y, false)
       }

@@ -110,13 +110,14 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "thunderbird",
                 "outlook",
                 "zoom",
+                "clickup",
                 "telegram",
             ],
         )
         self.assertEqual(backend.defaults, [])
         self.assertEqual(backend.logins, [])
         self.assertEqual(backend.package_preparations, 1)
-        self.assertIn("[3/18] Installing Mamba", output)
+        self.assertIn("[3/19] Installing Mamba", output)
 
     def test_login_and_default_hooks_run_for_installed_program(self) -> None:
         backend = FakeBackend(installed={"zen"})
@@ -155,6 +156,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "thunderbird",
                 "outlook",
                 "zoom",
+                "clickup",
                 "whatsapp",
                 "telegram",
             }
@@ -176,6 +178,7 @@ class ProgramInstallWorkflowTests(unittest.TestCase):
                 "thunderbird",
                 "outlook",
                 "zoom",
+                "clickup",
                 "whatsapp",
                 "telegram",
             ],

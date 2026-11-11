@@ -21,36 +21,29 @@ section = "left"
 after = "tornikegomareli.spaces"
 
 [[plugin]]
+id = "omarchy.elsewhen"
+builtin = true
+section = "center"
+after = "omarchy.clock"
+
+[[plugin]]
 id = "eduardodallecort.weather-radar"
 url = "https://github.com/eduardodallecort/omarchy-weather-radar.git"
 section = "center"
 after = "omarchy.weather"
 replaces = ["com.omastorm.radar"]
 
-[[plugin]]
-id = "aabulkhairov.battery-insights"
-url = "https://github.com/aabulkhairov/omarchy-battery-insights.git"
-section = "right"
-after = "omarchy.tray"
-
-# This places Battery Insights beside the tray; plugin widgets cannot enter its
-# expandable StatusNotifier drawer. It intentionally does not replace Power.
-
+# Proton's GUI and CLI are mutually exclusive; keep these sources disabled so
+# the bar cannot continuously fail while the desktop app is running.
 [[plugin]]
 id = "io.github.grichard99.omaproton-vpn"
 url = "https://github.com/grichard99/omaproton-vpn.git"
-section = "right"
-after = "omarchy.network"
-replaces = ["jkoestinger.vpn"]
 enabled = false
 
 [[plugin]]
 id = "jkoestinger.vpn"
 url = "https://github.com/jkoestinger/omarchy-vpn.git"
-section = "right"
-after = "omarchy.network"
-enabled = true
-replaces = ["io.github.grichard99.omaproton-vpn"]
+enabled = false
 
 [[plugin]]
 id = "omamail"
@@ -74,7 +67,60 @@ user_services = ["hyprmoncfgd.service"]
 # the binary AUR package.
 
 [[plugin]]
+id = "omarchy.tray"
+builtin = true
+section = "right"
+after = "crmne.hyprmoncfg"
+replaces = ["io.github.tyrichards.tray"]
+
+[[plugin]]
+id = "io.github.tyrichards.tray"
+url = "https://github.com/TyRichards/omarchy-tray.git"
+enabled = false
+
+[[plugin]]
+id = "aabulkhairov.battery-insights"
+url = "https://github.com/aabulkhairov/omarchy-battery-insights.git"
+section = "right"
+after = "omarchy.tray"
+
+# This places Battery Insights beside the tray; plugin widgets cannot enter its
+# expandable StatusNotifier drawer. It intentionally does not replace Power.
+
+[[plugin]]
+id = "zoltanf.hw-monitor"
+url = "https://github.com/zoltanf/omarchy-hw-monitor.git"
+section = "right"
+after = "omarchy.tray"
+replaces = ["harshith.system-monitor"]
+
+[[plugin]]
+id = "harshith.system-monitor"
+url = "https://github.com/Harshith292002/omarchy-system-monitor.git"
+section = "right"
+after = "zoltanf.hw-monitor"
+enabled = false
+
+[[plugin]]
+id = "robzolkos.github"
+url = "https://github.com/robzolkos/omarchy-github.git"
+section = "right"
+after = "zoltanf.hw-monitor"
+
+[[plugin]]
+id = "shavanced.notification-center"
+url = "https://github.com/Shavanced/omarchy-notification-center-plugin.git"
+section = "right"
+after = "robzolkos.github"
+enabled = false
+
+[[plugin]]
 id = "jankeesvw.notification-center"
 url = "https://github.com/jankeesvw/omarchy-notification-center.git"
 section = "right"
-after = "crmne.hyprmoncfg"
+after = "robzolkos.github"
+replaces = ["shavanced.notification-center"]
+
+[[plugin]]
+id = "io.github.maajix.spotlight"
+url = "https://github.com/maajix/omarchy-spotlight.git"

@@ -215,7 +215,7 @@ if [[ $PHASE == initial ]]; then
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
   done
-  step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
+  step 'Restore stock bar and shell' "$LAUNCHER" theme bar-stock -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
   summon_menu_when_ready
@@ -251,7 +251,7 @@ elif [[ $PHASE == post-upgrade && $MODE == upgrade ]]; then
     "$LAUNCHER" theme "bar-$style" -y --no-progress
     step "Theme idempotency $sequence/$style" cmp "$ARTIFACTS/state-before-post-upgrade.json" "$STATE_ROOT/themes/olio-su-silicio/state.json"
   done
-  step 'Restore stock theme' "$LAUNCHER" theme restore -y --no-progress
+  step 'Restore stock bar and shell' "$LAUNCHER" theme bar-stock -y --no-progress
   session
   [[ $OMARCHY_PATH == /usr/share/omarchy ]]
   summon_menu_when_ready

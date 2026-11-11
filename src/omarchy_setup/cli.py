@@ -260,8 +260,8 @@ def build_parser() -> argparse.ArgumentParser:
         "action",
         nargs="?",
         default="bar-fixed",
-        choices=("bar-fixed", "bar-floating", "apply", "status", "restore"),
-        help="bar-fixed (default), bar-floating, status, or restore",
+        choices=("bar-fixed", "bar-floating", "bar-stock", "apply", "status", "restore"),
+        help="bar-fixed (default), bar-floating, bar-stock, status, or restore",
     )
     theme.add_argument(
         "-y",
