@@ -29,6 +29,7 @@ class ThemeHostTests(unittest.TestCase):
         self.assertIn("Component.onCompleted: applyBarConfig()", bar)
         self.assertNotIn("shellConfigReady", bar)
         self.assertIn("api, slot.moduleSettings)", bar)
+        self.assertIn("if (!slot.firstParty)", bar)
         hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)
@@ -152,9 +153,11 @@ host.pluginRegistry.isEnabled = id => id === 'first.widget';
 host.pluginRegistry.installedPlugins['first.widget'] = {id:'first.widget', __isFirstParty:true};
 host.barWidgetRegistry.widgets['first.widget'] = {component: {createObject:(parent, props)=>({parent, props})}};
 host.barEntryConfigured = id => id === 'first.widget';
-const first = context.create(host, 'olio.bar', 'first.widget', {}, {pluginId:'first.widget', moduleName:'first.widget'}, settings);
+const firstBar = {barSize: 32};
+const first = context.create(host, 'olio.bar', 'first.widget', {}, firstBar, settings);
 assert.equal(first.props.settings, settings);
 assert.equal(first.props.moduleName, 'first.widget');
+assert.equal(first.props.bar, firstBar);
 """
         result = subprocess.run(
             ["node", "-e", script, str(ROOT / "themes/olio-su-silicio/shell/OlioHostedWidgets.js")],

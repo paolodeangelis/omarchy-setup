@@ -11,9 +11,7 @@ function create(host, ownerId, moduleName, parent, barApi, settings) {
       || !host.pluginHasBarCapabilities(host.pluginRegistry.installedPlugins[owner])
       || !manifest
       || !host.pluginRegistry.isEnabled(id) || !host.barEntryConfigured(id)
-      || !entry || !entry.component || !parent || !barApi
-      || String(barApi.pluginId) !== id
-      || host.pluginRegistry.resolveEnabledId(String(barApi.moduleName)) !== id)
+      || !entry || !entry.component || !parent || !barApi)
     return null
 
   if (manifest.__isFirstParty)
@@ -22,6 +20,10 @@ function create(host, ownerId, moduleName, parent, barApi, settings) {
       settings: settings || {},
       bar: barApi
     })
+
+  if (String(barApi.pluginId) !== id
+      || host.pluginRegistry.resolveEnabledId(String(barApi.moduleName)) !== id)
+    return null
 
   var component = Qt.createComponent(Qt.resolvedUrl("OlioHostedBarWidget.qml"))
   if (component.status !== Component.Ready) {

@@ -2066,7 +2066,8 @@ Item {
         host = root.shell.createBarWidget(slot.moduleName, hostedLoader,
           api, slot.moduleSettings)
         if (host) {
-          host.widgetSettings = Qt.binding(function() { return slot.moduleSettings })
+          if (!slot.firstParty)
+            host.widgetSettings = Qt.binding(function() { return slot.moduleSettings })
           loadedComponent = slot.registryComponent
         } else console.warn("Olio: host could not create widget " + slot.moduleName)
       }
