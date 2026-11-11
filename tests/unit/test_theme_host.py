@@ -30,6 +30,7 @@ class ThemeHostTests(unittest.TestCase):
         self.assertNotIn("shellConfigReady", bar)
         self.assertIn("api, slot.moduleSettings)", bar)
         self.assertIn("if (!slot.firstParty)", bar)
+        self.assertIn("firstParty ? hostedLoader.host : hostedLoader.host.item", bar)
         hosted = (ROOT / "themes/olio-su-silicio/shell/OlioHostedBarWidget.qml").read_text()
         self.assertIn("readonly property var source: host && host.sourceBar", hosted)
         self.assertNotIn("pluginId: host.sourceBar.pluginId", hosted)

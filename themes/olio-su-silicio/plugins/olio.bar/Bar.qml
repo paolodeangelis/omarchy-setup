@@ -1969,7 +1969,8 @@ Item {
     readonly property bool useHostedWidget: registered
       && !!root.shell && typeof root.shell.createBarWidget === "function"
     readonly property var activeItem: {
-      if (useHostedWidget) return hostedLoader.host ? hostedLoader.host.item : null
+      if (useHostedWidget)
+        return hostedLoader.host ? (firstParty ? hostedLoader.host : hostedLoader.host.item) : null
       if (registered) return registryLoader.item
       if (qmlCustom) return qmlLoader.item
       return componentLoader.item
